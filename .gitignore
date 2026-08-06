@@ -22,3 +22,14 @@ pnpm-debug.log*
 
 # jetbrains setting folder
 .idea/
+
+# 导航数据（AIRAC 派生，见 can-web 的 data/navdata/README.md）。
+#
+# **这个仓库是公开的**，而那批文件是从某个商业导航数据库里生成的 —— can-web
+# 之所以敢把它们提交进去，唯一的理由就是那个仓库是私有的，它自己的 README 写
+# 得很清楚：「一旦公开或者被 fork 出去，这个理由就不成立了」。拆到这里正是被
+# fork 出去的那种情况。
+#
+# 所以文件不进仓库，也不进公开的镜像。用 NAVDATA_DIR 指到运行时挂进来的目录；
+# 文件缺席时 /api/v1/route 回 503，地图退回那条直飞弧线，不会坏。
+data/navdata/

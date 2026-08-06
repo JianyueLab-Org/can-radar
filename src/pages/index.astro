@@ -1,11 +1,36 @@
 ---
-import Welcome from '../components/Welcome.astro';
-import Layout from '../layouts/Layout.astro';
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Header from "@/components/Header.vue";
+import Radar from "@/components/Radar.vue";
+import { getLocale, getMessages } from "@/lib/i18n";
 
-// Welcome to Astro! Wondering what to do next? Check out the Astro documentation at https://docs.astro.build
-// Don't want to use any of this? Delete everything in this file, the `assets`, `components`, and `layouts` directories, and start fresh.
+const locale = getLocale(Astro.cookies);
+const headerMessages = getMessages(locale, "header");
+const radarMessages = getMessages(locale, "radar");
+/**
+ * 雷达站上没有会话，也拿不到主站的会话。
+ *
+ * can-web 的会话 cookie 是 HttpOnly 且绑在 airwaysn.org 上的，跨源读不到 ——
+ * 所以这里没有办法知道来的人登没登录，只能一律按未登录渲染。代价只是导航上
+ * 那一格永远写着「登录」；点过去落在主站，本来就登录着的人会直接进面板。
+ *
+ * 反过来做（把会话状态跨源传过来）要么要一个共享 cookie 域，要么要一次
+ * 跨站请求，两者都是为了一个字的文案去开一个口子。
+ */
+const loggedIn = false;
 ---
 
-<Layout>
-	<Welcome />
-</Layout>
+<BaseLayout title="Radar · Cerulean Aviation Network" floatingControls={false}>
+  <div class="flex h-dvh flex-col overflow-hidden bg-surface">
+    <Header
+      loggedIn={loggedIn}
+      messages={headerMessages}
+      pathname={Astro.url.pathname}
+      locale={locale}
+      client:load
+    />
+    <main id="main-content" tabindex="-1" class="flex min-h-0 flex-1 flex-col">
+      <Radar messages={radarMessages} client:only="vue" />
+    </main>
+  </div>
+</BaseLayout>

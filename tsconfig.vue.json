@@ -1,0 +1,13 @@
+{
+  // `astro check` reports 0 errors for a Vue SFC no matter what is in it — it
+  // only diagnoses .astro/.ts. That left every island (most of the interactive
+  // UI) with no type gate at all. vue-tsc covers them; .astro files are
+  // excluded here because vue-tsc cannot parse them, so the two runs are
+  // complementary and `bun run typecheck` invokes both.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [".astro/types.d.ts", "src/**/*.ts", "src/**/*.vue"],
+  "exclude": ["node_modules", "dist", "prisma/generated"]
+}

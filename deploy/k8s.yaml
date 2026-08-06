@@ -1,0 +1,139 @@
+# 在线雷达在 jyl-tyo 上的部署。
+#
+# 形状和 can-dev / llm-web 一致：一个应用一个 namespace，Deployment 和 Service
+# 都叫 app，Service 暴露 80，Ingress 走默认的 cloudflare-tunnel（控制器会把
+# radar.airwaysn.org 的 DNS 记录建好）。
+#
+# ---------------------------------------------------------------------------
+# 导航数据不在镜像里，这一条是这份清单最要紧的地方
+# ---------------------------------------------------------------------------
+#
+# data/navdata 是 AIRAC 派生的商业数据。can-web 把它提交进自己仓库的唯一理由
+# 是那个仓库私有；can-radar 是**公开**仓库，镜像也在公开的 GHCR 上，所以它既
+# 不进 git 也不进镜像层 —— 打进去就等于把那个数据库发出去了。
+#
+# 于是运行时挂进来，NAVDATA_DIR 指过去。先建：
+#
+#   kubectl -n can-radar create secret generic navdata \
+#     --from-file=airways.txt.gz=<can-web>/data/navdata/airways.txt.gz \
+#     --from-file=fixes.txt.gz=<can-web>/data/navdata/fixes.txt.gz \
+#     ...（data/navdata 下的每一个 .txt.gz）
+#
+# 用 Secret 而不是 ConfigMap：ConfigMap 存不了二进制，而这些是 gzip。注意
+# Secret 有 1 MiB 的上限，整套 navdata 是 5.9 MB —— 塞不进一个 Secret。所以
+# 实际上要么拆成几个 Secret 分别挂到同一个目录，要么用一个 PVC（longhorn 在
+# 这个集群里是装好的）。**PVC 是推荐做法**，见 README。
+#
+# 挂载缺席不会让服务起不来：/api/v1/route 回 503，地图退回直飞弧线。所以第一
+# 次上线可以先不挂，把这件事和部署分开验。
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: can-radar
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: navdata
+  namespace: can-radar
+spec:
+  accessModes: ["ReadOnlyMany"]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app
+  namespace: can-radar
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: can-radar
+  template:
+    metadata:
+      labels:
+        app: can-radar
+    spec:
+      containers:
+        - name: app
+          image: ghcr.io/jianyuelab-org/can-radar:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 4321
+          env:
+            - name: CAN_WEB_ORIGIN
+              value: https://airwaysn.org
+            - name: NAVDATA_DIR
+              value: /srv/navdata
+          volumeMounts:
+            - name: navdata
+              mountPath: /srv/navdata
+              readOnly: true
+          # 首页不碰 can-web，也不需要导航数据，所以它是个诚实的探活目标。
+          # 注意它**不**能证明航路解析可用 —— navdata 没挂上时首页照样 200，
+          # 只是选中飞机看不到航路。那要靠 /api/v1/route 手动验。
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 4321
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 4321
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            requests:
+              cpu: 100m
+              # navdata 是就地二分查找、不解析成字典的，常驻约 25 MB；
+              # 解析成对象的写法会是 320 MB，那正是它长成现在这样的原因。
+              memory: 192Mi
+            limits:
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: navdata
+          persistentVolumeClaim:
+            claimName: navdata
+            readOnly: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app
+  namespace: can-radar
+spec:
+  selector:
+    app: can-radar
+  ports:
+    - port: 80
+      targetPort: 4321
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: can-radar
+  namespace: can-radar
+spec:
+  ingressClassName: cloudflare-tunnel
+  rules:
+    - host: radar.airwaysn.org
+      http:
+        paths:
+          - backend:
+              service:
+                name: app
+                port:
+                  number: 80
+            path: /
+            pathType: Prefix

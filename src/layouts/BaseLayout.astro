@@ -1,0 +1,50 @@
+---
+import "@/styles/globals.css";
+import ThemeScript from "@/components/ThemeScript.astro";
+import ThemeLangControls from "@/components/ui/ThemeLangControls.vue";
+import { getLocale } from "@/lib/i18n";
+
+interface Props {
+  title?: string;
+  description?: string;
+  /**
+   * Pages that render <Header> get the theme/language switcher inline in the
+   * header and set this to false. Only the chrome-less pages (auth, errors)
+   * fall back to the floating pill.
+   */
+  floatingControls?: boolean;
+}
+
+const {
+  title = "Cerulean Aviation Network",
+  description = "A Friendly, Open, and Enthusiastic Flight Simulation Platform — Dedicated to Your Enjoyment",
+  floatingControls = true,
+} = Astro.props;
+
+const locale = getLocale(Astro.cookies);
+---
+
+<!doctype html>
+<html lang={locale} class="antialiased">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#4c92c1" />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="/logo-full.png" />
+    <ThemeScript />
+  </head>
+  <body>
+    <slot />
+    {
+      floatingControls && (
+        <ThemeLangControls locale={locale} variant="floating" client:idle />
+      )
+    }
+  </body>
+</html>
