@@ -20,12 +20,13 @@ bun run build && bun run start
 | 数据               | 来源                                                                       |
 | ------------------ | -------------------------------------------------------------------------- |
 | 在线飞机与管制席位 | can-fsd 的数据源 `https://data.airwaysn.org/v1/data.json`，浏览器直接读    |
-| 已飞航迹           | 本站 `/api/v1/track` —— **一个转发**，真正读 `flightPosition` 的是 can-web |
+| 已飞航迹           | 本站 `/api/v1/track` —— **一个转发**，真正读 `flightPosition` 的是 can-api |
 | 航路解析           | 本站 `/api/v1/route`，服务端读 `data/navdata`                              |
 
-航迹为什么是转发而不是直连数据库：`flightPosition` 归 can-web 的 Prisma 模型
-所有，而这个站点是整个网络上最公开、被爬得最凶的一个页面。让最暴露的东西持有
-数据库口令，是这次拆分最不该做的事。顺带的好处是不用给 can-web 开 CORS。
+航迹为什么是转发而不是直连数据库：`flightPosition` 的 schema 归 can-api 所有，
+而这个站点是整个网络上最公开、被爬得最凶的一个页面。让最暴露的东西持有数据库
+口令，是这次拆分最不该做的事。顺带的好处是不用给 can-api 开 CORS —— 转发在服务
+端，浏览器那边始终是同源的。
 
 ## 导航数据不在仓库里
 
@@ -54,6 +55,7 @@ bun run build && bun run start
 ## 部署
 
 见 [`deploy/k8s.yaml`](deploy/k8s.yaml)（jyl-tyo，`radar.airwaysn.org`）。
-镜像由 `.github/workflows/image.yml` 推到 GHCR；上线是手工一条
-`kubectl -n can-radar rollout restart deploy/app`，因为那个集群的 kubectl 走
-Omni 的 OIDC 认证，CI 里非交互地过不去。
+`.github/workflows/deploy.yml` 出镜像并滚动 Deployment，走组织里那份可复用工
+作流。上线不再需要手工 `rollout restart` —— 那一步没有部署记录，也没人知道线
+上跑的是哪个 commit。集群的 kubectl 走 Omni 的 OIDC，CI 里非交互地过不去，所
+以 CI 用的是直连 API server 的 `deployer` 服务账号（`KUBECONFIG_B64`）。

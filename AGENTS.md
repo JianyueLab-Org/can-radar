@@ -23,8 +23,8 @@ bun run build && bun run start
 `/api/v1/route` 回 503、地图退回直飞弧线，不会坏 —— 别为了「省事」把它打进镜
 像层。
 
-**2. 这个站点不碰数据库。** 航迹走 `/api/v1/track` 转发到 can-web。它是全网最
-公开的页面，不该拿着数据库口令。想加新数据时先问：能不能让 can-web 或 can-fsd
+**2. 这个站点不碰数据库。** 航迹走 `/api/v1/track` 转发到 can-api。它是全网最
+公开的页面，不该拿着数据库口令。想加新数据时先问：能不能让 can-api 或 can-fsd
 去读。
 
 **3. `radarTypes.ts` 是拷贝，两边都在用。** can-web 还要同一份数据源形状。改

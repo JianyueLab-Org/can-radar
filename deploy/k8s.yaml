@@ -68,8 +68,10 @@ spec:
           ports:
             - containerPort: 4321
           env:
-            - name: CAN_WEB_ORIGIN
-              value: https://airwaysn.org
+            # 航迹转发的上游。can-api 而不是 can-web —— 路径一个字没变，换的
+            # 只是主机。
+            - name: CAN_API_ORIGIN
+              value: https://api.airwaysn.org
             - name: NAVDATA_DIR
               value: /srv/navdata
           volumeMounts:
