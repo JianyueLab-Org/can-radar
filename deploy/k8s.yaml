@@ -32,17 +32,6 @@ kind: Namespace
 metadata:
   name: can-radar
 ---
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: navdata
-  namespace: can-radar
-spec:
-  accessModes: ["ReadOnlyMany"]
-  resources:
-    requests:
-      storage: 1Gi
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -67,12 +56,28 @@ spec:
           env:
             - name: CAN_WEB_ORIGIN
               value: https://airwaysn.org
-            - name: NAVDATA_DIR
-              value: /srv/navdata
-          volumeMounts:
-            - name: navdata
-              mountPath: /srv/navdata
-              readOnly: true
+            # NAVDATA_DIR 故意不设，navdata 也故意不挂 —— 见文件抬头。
+            # 这不是「还没做完」，是一个可以先上线的状态：/api/v1/route 回
+            # 503，地图退回直飞弧线，其余（在线飞机、席位、航迹）全都正常。
+            #
+            # 数据落到集群之后，加回这两段：
+            #
+            #   env:
+            #     - name: NAVDATA_DIR
+            #       value: /srv/navdata
+            #   volumeMounts:
+            #     - name: navdata
+            #       mountPath: /srv/navdata
+            #       readOnly: true
+            #   volumes:
+            #     - name: navdata
+            #       persistentVolumeClaim: { claimName: navdata, readOnly: true }
+            #
+            # 配套的 PVC（longhorn 是默认 StorageClass）：
+            #
+            #   accessModes: ["ReadWriteOnce"]   # 不是 ReadOnlyMany —— longhorn
+            #                                    # 的块设备不支持多节点只读挂载
+            #   resources: { requests: { storage: 1Gi } }
           # 首页不碰 can-web，也不需要导航数据，所以它是个诚实的探活目标。
           # 注意它**不**能证明航路解析可用 —— navdata 没挂上时首页照样 200，
           # 只是选中飞机看不到航路。那要靠 /api/v1/route 手动验。
@@ -96,16 +101,21 @@ spec:
               memory: 192Mi
             limits:
               memory: 512Mi
+          # 这四条是 PodSecurity 的 restricted 档要的。镜像里本来就是 USER
+          # node 在跑，但那是镜像的事，集群看不见 —— 不显式声明 runAsNonRoot
+          # 就只能按「可能是 root」对待，apply 时会报警告。
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            # 必须是数字。镜像里写的是 USER node（名字），kubelet 解析不了名
+            # 字，于是 runAsNonRoot 无从验证，容器直接 CreateContainerConfigError。
+            # 1000 就是 node 镜像里 node 用户的 uid。
+            runAsUser: 1000
+            seccompProfile:
+              type: RuntimeDefault
             capabilities:
               drop: ["ALL"]
-      volumes:
-        - name: navdata
-          persistentVolumeClaim:
-            claimName: navdata
-            readOnly: true
 ---
 apiVersion: v1
 kind: Service
