@@ -63,7 +63,7 @@ spec:
             readOnly: true
       containers:
         - name: app
-          image: ghcr.io/jianyuelab/can-radar:latest
+          image: ghcr.io/jianyuelab-org/can-radar:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 4321

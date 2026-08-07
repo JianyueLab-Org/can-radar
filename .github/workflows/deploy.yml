@@ -25,7 +25,7 @@ jobs:
   deploy:
     uses: JianyueLab-Org/actions/.github/workflows/deploy-k8s.yml@main
     with:
-      image: ghcr.io/jianyuelab/can-radar
+      image: ghcr.io/jianyuelab-org/can-radar
       namespace: can-radar
       manifest: deploy/k8s.yaml
       environment_url: https://radar.airwaysn.org
