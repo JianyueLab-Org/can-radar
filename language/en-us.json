@@ -62,6 +62,50 @@
       "online": "Online for",
       "remaining": "Remaining",
       "eta": "ETA"
+    },
+    "settings": {
+      "title": "Settings",
+      "basemap": "Basemap",
+      "basemapAuto": "Follow theme",
+      "basemapDark": "Dark",
+      "basemapLight": "Light",
+      "basemapSatellite": "Satellite",
+      "layers": "Layers",
+      "boundaries": "Sector boundaries",
+      "airportTags": "Airport tags",
+      "rangeRings": "Coverage rings",
+      "units": "Units",
+      "unitsAviation": "Feet / nm",
+      "unitsMetric": "Metres / km",
+      "close": "Close settings"
+    },
+    "filters": {
+      "title": "Filter",
+      "altitude": "Altitude",
+      "any": "Any",
+      "ground": "On the ground",
+      "low": "Below 10,000 ft",
+      "mid": "10,000–24,000 ft",
+      "high": "Above 24,000 ft",
+      "departure": "Departing",
+      "arrival": "Arriving",
+      "clear": "Clear filter",
+      "active": "Filtered — the map follows"
+    },
+    "airport": {
+      "title": "Airport",
+      "departures": "Departures",
+      "arrivals": "Arrivals",
+      "onStation": "On station",
+      "metar": "Weather",
+      "metarUnavailable": "No weather available for this airport",
+      "noDepartures": "No departures",
+      "noArrivals": "No arrivals",
+      "noStations": "Nobody on station",
+      "close": "Close"
+    },
+    "share": {
+      "copied": "Link copied"
     }
   },
   "common": {

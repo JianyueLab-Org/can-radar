@@ -37,6 +37,7 @@ import {
   type LatLon,
 } from "@/lib/radar";
 import type { Controller, Pilot, AtisData } from "@/lib/radarTypes";
+import type { RadarSettings } from "@/lib/radarState";
 
 const props = defineProps<{
   controllers: Controller[];
@@ -45,9 +46,17 @@ const props = defineProps<{
   theme: "dark" | "light";
   /** `pilot:<cid>` / `atc:<callsign>`, kept in sync with the traffic list. */
   selected?: string | null;
+  /** The viewer's own preferences — basemap and which layers are drawn. */
+  settings: RadarSettings;
+  /** Centre and zoom to open at, from a shared link. Read once, on setup. */
+  initialView?: { lat: number | null; lon: number | null; zoom: number | null };
 }>();
 
-const emit = defineEmits<{ (e: "select", key: string | null): void }>();
+const emit = defineEmits<{
+  (e: "select", key: string | null): void;
+  /** Reported so the parent can put the viewport in the URL. */
+  (e: "move", view: { lat: number; lon: number; zoom: number }): void;
+}>();
 
 /** Below this zoom, parked and taxiing aircraft are hidden — at world scale a
  *  busy apron is one illegible blob and the airborne picture is what matters. */
@@ -63,6 +72,39 @@ const TILES: Record<"dark" | "light", string> = {
   dark: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
   light: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
 };
+
+/**
+ * 卫星底图。
+ *
+ * 单独一条而不是并进 TILES，因为它和深浅两套不是同一个维度：深浅跟着主题走，卫
+ * 星是人主动选的。它也没有 `{s}` 子域和 `{r}` 高清后缀 —— 照抄 CARTO 的模板会得
+ * 到一片 404。
+ */
+const SATELLITE_TILE =
+  "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
+
+const SATELLITE_ATTRIBUTION = "Imagery © Esri, Maxar, Earthstar Geographics";
+
+/** 当前该用哪张底图。auto 跟主题，其余听设置的。 */
+function tileUrl(): string {
+  switch (props.settings.basemap) {
+    case "satellite":
+      return SATELLITE_TILE;
+    case "dark":
+      return TILES.dark;
+    case "light":
+      return TILES.light;
+    default:
+      return TILES[props.theme];
+  }
+}
+
+/** 卫星图的子域和高清后缀都不支持，所以选项要跟着底图换。 */
+function tileOptions(): { subdomains: string; maxZoom: number } {
+  return props.settings.basemap === "satellite"
+    ? { subdomains: "", maxZoom: 18 }
+    : { subdomains: "abcd", maxZoom: 18 };
+}
 
 const mapContainer = ref<HTMLDivElement | null>(null);
 
@@ -1690,6 +1732,45 @@ function focus(key: string) {
   }
 }
 
+/**
+ * 图层开关。
+ *
+ * 加进地图和从地图移除，而不是把图层里的内容清空 —— 移除保留了图层里所有已经建
+ * 好的标记和多边形，再打开时是瞬间的；清空则要把边界的几兆 GeoJSON 重新解析一
+ * 遍，那正是这个文件开头说的「永远不重建地图」要避免的事。
+ */
+function applyLayerVisibility() {
+  if (!map) return;
+  const toggles: [L.LayerGroup | null, boolean][] = [
+    [boundariesLayer, props.settings.boundaries],
+    [quietBoundariesLayer, props.settings.boundaries],
+    [rangeLayer, props.settings.rangeRings],
+    [atcLayer, props.settings.airportTags],
+  ];
+  for (const [layer, visible] of toggles) {
+    if (!layer) continue;
+    if (visible && !map.hasLayer(layer)) map.addLayer(layer);
+    if (!visible && map.hasLayer(layer)) map.removeLayer(layer);
+  }
+}
+
+watch(
+  () => [
+    props.settings.basemap,
+    props.settings.boundaries,
+    props.settings.airportTags,
+    props.settings.rangeRings,
+  ],
+  () => {
+    if (tileLayer) {
+      tileLayer.setUrl(tileUrl());
+      // 卫星图没有子域，换过去之后再换回来必须把它加回来，否则 {s} 展不开。
+      tileLayer.options.subdomains = tileOptions().subdomains;
+    }
+    applyLayerVisibility();
+  },
+);
+
 defineExpose({ focus });
 
 /* ------------------------------------------------------------------ *
@@ -1762,9 +1843,15 @@ function fitToTraffic() {
 onMounted(async () => {
   if (!mapContainer.value) return;
 
+  // 分享链接带来的中心和缩放优先于默认视角。三项必须**一起**齐备才用：只有中心
+  // 没有缩放的话，会得到一个位置对但比例尺莫名其妙的画面。
+  const shared = props.initialView;
+  const hasShared =
+    shared?.lat != null && shared?.lon != null && shared?.zoom != null;
+
   map = L.map(mapContainer.value, {
-    center: [35.0, 105.0],
-    zoom: 4,
+    center: hasShared ? [shared!.lat!, shared!.lon!] : [35.0, 105.0],
+    zoom: hasShared ? shared!.zoom! : 4,
     zoomControl: true,
     preferCanvas: true,
     // Keep the world inside the frame vertically: no dragging the map off the
@@ -1785,7 +1872,7 @@ onMounted(async () => {
   });
   resizeObserver.observe(mapContainer.value);
 
-  tileLayer = L.tileLayer(TILES[props.theme], {
+  tileLayer = L.tileLayer(tileUrl(), {
     // The airspace credits are not decoration: VATSpy's data is CC BY-SA 4.0,
     // which requires attribution wherever it is shown.
     attribution:
@@ -1793,11 +1880,18 @@ onMounted(async () => {
       '<a href="https://github.com/vatsimnetwork/vatspy-data-project" target="_blank" rel="noreferrer">VATSpy</a>' +
       " (CC BY-SA 4.0) · " +
       '<a href="https://github.com/vatsimnetwork/simaware-tracon-project" target="_blank" rel="noreferrer">SimAware</a>',
-    maxZoom: 18,
-    subdomains: "abcd",
+    ...tileOptions(),
   }).addTo(map);
 
   L.control.scale({ imperial: false, position: "bottomleft" }).addTo(map);
+
+  // 视口回报给上层写进 URL。moveend 而不是 move：拖动过程中每帧都写一次地址栏，
+  // 既没意义又会让浏览器忙着做无用功。
+  map.on("moveend zoomend", () => {
+    if (!map) return;
+    const centre = map.getCenter();
+    emit("move", { lat: centre.lat, lon: centre.lng, zoom: map.getZoom() });
+  });
 
   // The vendored datasets have to be credited where they are shown: VATSpy is
   // CC BY-SA 4.0, which requires it, and SimAware is community work that
@@ -1817,6 +1911,7 @@ onMounted(async () => {
   routeLayer = L.layerGroup().addTo(map);
   trailLayer = L.layerGroup().addTo(map);
   atcLayer = L.layerGroup().addTo(map);
+  applyLayerVisibility();
   groundLayer = L.layerGroup();
   airborneLayer = L.layerGroup().addTo(map);
 
@@ -1869,7 +1964,7 @@ watch(
 watch(
   () => props.theme,
   (theme) => {
-    if (tileLayer) tileLayer.setUrl(TILES[theme]);
+    if (tileLayer) tileLayer.setUrl(tileUrl());
     rescaleIcons();
     drawTrail();
     drawRoute();

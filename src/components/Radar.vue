@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import RadarMap from "@/components/RadarMap.vue";
 import RadarDetails from "@/components/RadarDetails.vue";
 import { getFacilityName } from "@/lib/facilities";
@@ -14,6 +14,21 @@ import BaseBadge from "@/components/ui/BaseBadge.vue";
 import Icon from "@/components/ui/Icon.vue";
 import Skeleton from "@/components/ui/Skeleton.vue";
 import { DATAFEED_URL, type ApiData } from "@/lib/radarTypes";
+import {
+  DEFAULT_SETTINGS,
+  loadSettings,
+  readView,
+  saveSettings,
+  writeView,
+  type RadarSettings,
+} from "@/lib/radarState";
+import {
+  EMPTY_FILTER,
+  activeAirports,
+  isFiltering,
+  matchesFilter,
+  type TrafficFilter,
+} from "@/lib/radarFilter";
 
 const props = defineProps<{ messages: Record<string, unknown> }>();
 const t = createTranslator(props.messages);
@@ -28,7 +43,16 @@ const theme = ref<"dark" | "light">("light");
 // so the map is never squeezed into a sliver on a phone.
 const panelOpen = ref(true);
 const activeTab = ref<"controllers" | "pilots">("controllers");
-const filter = ref("");
+/* 筛选是一个对象而不是一个字符串了：文字框只是它的一项，另外三项（高度层、起降
+ * 机场）是下拉。**四项一起作用到列表和地图**，见 mapPilots。 */
+const filter = ref<TrafficFilter>({ ...EMPTY_FILTER });
+
+/** 这个人的偏好，跟着浏览器走。挂载后才读 —— SSR 时没有 localStorage。 */
+const settings = ref<RadarSettings>({ ...DEFAULT_SETTINGS });
+const settingsOpen = ref(false);
+
+/** 从 URL 带进来的初始视图，只在挂载时读一次。 */
+const initialView = ref(readView(""));
 
 let interval: ReturnType<typeof setInterval> | null = null;
 let observer: MutationObserver | null = null;
@@ -83,6 +107,12 @@ function onGlobalKeydown(event: KeyboardEvent) {
 
 onMounted(() => {
   syncTheme();
+  settings.value = loadSettings();
+
+  // 先读 URL 再取数据：选中的那个键要在第一帧就传给地图，否则地图会先画一遍没有
+  // 选中的画面再跳一次。
+  initialView.value = readView(window.location.search);
+  if (initialView.value.selected) selected.value = initialView.value.selected;
   // 跟随暗色模式切换（替代 next-themes 响应式）
   observer = new MutationObserver(syncTheme);
   observer.observe(document.documentElement, {
@@ -105,7 +135,7 @@ onBeforeUnmount(() => {
 });
 
 function matches(value: string | undefined): boolean {
-  const needle = filter.value.trim().toLowerCase();
+  const needle = filter.value.text.trim().toLowerCase();
   if (!needle) return true;
   return (value ?? "").toLowerCase().includes(needle);
 }
@@ -128,8 +158,39 @@ const filteredControllers = computed(() =>
   controllers.value.filter((c) => matches(c.callsign)),
 );
 const filteredPilots = computed(
-  () => data.value?.pilots.filter((p) => matches(p.callsign)) ?? [],
+  () => data.value?.pilots.filter((p) => matchesFilter(p, filter.value)) ?? [],
 );
+
+const filtering = computed(() => isFiltering(filter.value));
+
+/** 下拉里只列**当前真的有交通**的机场，按架次排。 */
+const departureOptions = computed(() =>
+  activeAirports(data.value?.pilots ?? [], "departure"),
+);
+const arrivalOptions = computed(() =>
+  activeAirports(data.value?.pilots ?? [], "arrival"),
+);
+
+function clearFilter() {
+  filter.value = { ...EMPTY_FILTER };
+}
+
+/**
+ * 地图上画哪些飞机。
+ *
+ * 就是筛出来的那批 —— 地图的增量同步会自己把不在列表里的标记撤掉，所以筛选天然
+ * 同步到地图，不需要第二套逻辑。**唯一的例外是选中的那架**：把它筛掉之后详情面
+ * 板还开着、地图上却没有它，那是一个自相矛盾的画面。
+ */
+const mapPilots = computed(() => {
+  const visible = filteredPilots.value;
+  const chosen = selectedPilot.value;
+  if (!chosen) return visible;
+  const key = chosen.cid || chosen.callsign;
+  return visible.some((p) => (p.cid || p.callsign) === key)
+    ? visible
+    : [...visible, chosen];
+});
 
 const legend = computed(() => [
   // A hollow swatch, because that is exactly how coverage draws on the map.
@@ -196,6 +257,36 @@ const selectedIsAtis = computed(
       (a) => a.callsign === selectedStation.value?.callsign,
     ),
 );
+
+/** 地图当前的中心和缩放，由地图的 moveend 回报。 */
+const viewport = ref<{ lat: number; lon: number; zoom: number } | null>(null);
+
+/**
+ * 把「在看什么」写回地址栏。
+ *
+ * `replaceState` 而不是 `pushState`：地图每拖一下都进一次历史记录的话，返回键就
+ * 变成了逐帧倒放，而人按返回是想离开这一页。
+ *
+ * 只有选中和视口进 URL，设置不进 —— 发给别人的链接不该把我的底图口味带过去。
+ */
+function syncUrl() {
+  if (typeof window === "undefined") return;
+  const query = writeView({
+    selected: selected.value,
+    lat: viewport.value?.lat ?? null,
+    lon: viewport.value?.lon ?? null,
+    zoom: viewport.value?.zoom ?? null,
+  });
+  window.history.replaceState(null, "", query || window.location.pathname);
+}
+
+function onMapMove(next: { lat: number; lon: number; zoom: number }) {
+  viewport.value = next;
+  syncUrl();
+}
+
+watch(selected, syncUrl);
+watch(settings, (next) => saveSettings(next), { deep: true });
 </script>
 
 <template>
@@ -291,6 +382,16 @@ const selectedIsAtis = computed(
         <button
           type="button"
           class="btn btn-secondary px-2.5 py-1.5 text-xs"
+          :aria-expanded="settingsOpen"
+          @click="settingsOpen = !settingsOpen"
+        >
+          <Icon name="cog6Tooth" class="size-4" />
+          <span class="hidden sm:inline">{{ t("settings.title") }}</span>
+        </button>
+
+        <button
+          type="button"
+          class="btn btn-secondary px-2.5 py-1.5 text-xs"
           :aria-expanded="panelOpen"
           @click="panelOpen = !panelOpen"
         >
@@ -300,6 +401,62 @@ const selectedIsAtis = computed(
           </span>
         </button>
       </div>
+    </div>
+
+    <!-- Settings. A small popover rather than a drawer: it is four toggles and
+         a radio group, and taking the whole side of the screen for that would
+         push the map out of the way to change how the map looks. -->
+    <div
+      v-if="settingsOpen"
+      class="border-line bg-surface absolute top-14 right-3 z-30 w-64 rounded-lg border p-3 shadow-lg"
+      role="dialog"
+      :aria-label="t('settings.title')"
+    >
+      <div class="mb-2 flex items-center justify-between">
+        <span class="text-sm font-medium">{{ t("settings.title") }}</span>
+        <button
+          type="button"
+          class="btn btn-ghost p-1"
+          :aria-label="t('settings.close')"
+          @click="settingsOpen = false"
+        >
+          <Icon name="xMark" class="size-4" />
+        </button>
+      </div>
+
+      <label class="text-muted mb-1 block text-xs">{{
+        t("settings.basemap")
+      }}</label>
+      <select v-model="settings.basemap" class="input mb-3 w-full text-xs">
+        <option value="auto">{{ t("settings.basemapAuto") }}</option>
+        <option value="dark">{{ t("settings.basemapDark") }}</option>
+        <option value="light">{{ t("settings.basemapLight") }}</option>
+        <option value="satellite">{{ t("settings.basemapSatellite") }}</option>
+      </select>
+
+      <span class="text-muted mb-1 block text-xs">{{
+        t("settings.layers")
+      }}</span>
+      <label class="mb-1 flex items-center gap-2 text-xs">
+        <input v-model="settings.boundaries" type="checkbox" />
+        {{ t("settings.boundaries") }}
+      </label>
+      <label class="mb-1 flex items-center gap-2 text-xs">
+        <input v-model="settings.airportTags" type="checkbox" />
+        {{ t("settings.airportTags") }}
+      </label>
+      <label class="mb-3 flex items-center gap-2 text-xs">
+        <input v-model="settings.rangeRings" type="checkbox" />
+        {{ t("settings.rangeRings") }}
+      </label>
+
+      <label class="text-muted mb-1 block text-xs">{{
+        t("settings.units")
+      }}</label>
+      <select v-model="settings.units" class="input w-full text-xs">
+        <option value="aviation">{{ t("settings.unitsAviation") }}</option>
+        <option value="metric">{{ t("settings.unitsMetric") }}</option>
+      </select>
     </div>
 
     <!-- Details + map + traffic list -->
@@ -326,11 +483,14 @@ const selectedIsAtis = computed(
           v-if="data"
           ref="mapRef"
           :controllers="controllers"
-          :pilots="data.pilots"
+          :pilots="mapPilots"
           :atis="data.atis"
           :theme="theme"
           :selected="selected"
+          :settings="settings"
+          :initial-view="initialView"
           @select="selected = $event"
+          @move="onMapMove"
         />
         <div
           v-else
@@ -389,12 +549,73 @@ const selectedIsAtis = computed(
               class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-faint"
             />
             <input
-              v-model="filter"
+              v-model="filter.text"
               type="search"
               :placeholder="t('searchPlaceholder')"
               :aria-label="t('searchPlaceholder')"
               class="input pl-9 text-sm"
             />
+          </div>
+
+          <!-- 三个下拉只在「飞机」页显示：高度和起降机场对席位没有意义，而一组
+               永远灰着的控件比没有这组控件更让人费解。 -->
+          <div
+            v-if="activeTab === 'pilots'"
+            class="mt-2 grid grid-cols-3 gap-1.5"
+          >
+            <select
+              v-model="filter.altitude"
+              class="input text-xs"
+              :aria-label="t('filters.altitude')"
+            >
+              <option value="any">{{ t("filters.altitude") }}</option>
+              <option value="ground">{{ t("filters.ground") }}</option>
+              <option value="low">{{ t("filters.low") }}</option>
+              <option value="mid">{{ t("filters.mid") }}</option>
+              <option value="high">{{ t("filters.high") }}</option>
+            </select>
+
+            <select
+              v-model="filter.departure"
+              class="input text-xs"
+              :aria-label="t('filters.departure')"
+            >
+              <option value="">{{ t("filters.departure") }}</option>
+              <option
+                v-for="a in departureOptions"
+                :key="a.icao"
+                :value="a.icao"
+              >
+                {{ a.icao }} ({{ a.count }})
+              </option>
+            </select>
+
+            <select
+              v-model="filter.arrival"
+              class="input text-xs"
+              :aria-label="t('filters.arrival')"
+            >
+              <option value="">{{ t("filters.arrival") }}</option>
+              <option v-for="a in arrivalOptions" :key="a.icao" :value="a.icao">
+                {{ a.icao }} ({{ a.count }})
+              </option>
+            </select>
+          </div>
+
+          <!-- 说清楚地图也跟着筛了。不说的话，看到地图上只剩三架的人第一反应是
+               网络掉线了，而不是自己刚才选了个筛选条件。 -->
+          <div
+            v-if="filtering"
+            class="mt-2 flex items-center justify-between text-xs"
+          >
+            <span class="text-muted">{{ t("filters.active") }}</span>
+            <button
+              type="button"
+              class="btn btn-ghost px-2 py-0.5"
+              @click="clearFilter"
+            >
+              {{ t("filters.clear") }}
+            </button>
           </div>
         </div>
 
@@ -441,7 +662,7 @@ const selectedIsAtis = computed(
             </li>
           </ul>
           <p v-else class="px-3 py-8 text-center text-sm text-muted">
-            {{ filter ? t("noMatches") : t("noControllers") }}
+            {{ filtering ? t("noMatches") : t("noControllers") }}
           </p>
         </div>
 
@@ -498,7 +719,7 @@ const selectedIsAtis = computed(
             </li>
           </ul>
           <p v-else class="px-3 py-8 text-center text-sm text-muted">
-            {{ filter ? t("noMatches") : t("noPilots") }}
+            {{ filtering ? t("noMatches") : t("noPilots") }}
           </p>
         </div>
       </aside>

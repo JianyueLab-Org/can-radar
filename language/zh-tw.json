@@ -62,6 +62,50 @@
       "online": "已在線",
       "remaining": "剩餘",
       "eta": "預計到達"
+    },
+    "settings": {
+      "title": "設定",
+      "basemap": "底圖",
+      "basemapAuto": "跟隨主題",
+      "basemapDark": "深色",
+      "basemapLight": "淺色",
+      "basemapSatellite": "衛星",
+      "layers": "圖層",
+      "boundaries": "管制區邊界",
+      "airportTags": "機場標籤",
+      "rangeRings": "涵蓋範圍環",
+      "units": "單位",
+      "unitsAviation": "英尺 / 海里",
+      "unitsMetric": "公尺 / 公里",
+      "close": "關閉設定"
+    },
+    "filters": {
+      "title": "篩選",
+      "altitude": "高度層",
+      "any": "不限",
+      "ground": "地面",
+      "low": "10000 英尺以下",
+      "mid": "10000–24000 英尺",
+      "high": "24000 英尺以上",
+      "departure": "起飛",
+      "arrival": "降落",
+      "clear": "清除篩選",
+      "active": "已篩選，地圖同步"
+    },
+    "airport": {
+      "title": "機場",
+      "departures": "離場",
+      "arrivals": "進場",
+      "onStation": "在場席位",
+      "metar": "天氣報文",
+      "metarUnavailable": "取不到這個機場的天氣",
+      "noDepartures": "沒有離場航班",
+      "noArrivals": "沒有進場航班",
+      "noStations": "沒有席位上線",
+      "close": "關閉"
+    },
+    "share": {
+      "copied": "連結已複製"
     }
   },
   "common": {

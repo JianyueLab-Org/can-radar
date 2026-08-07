@@ -62,6 +62,50 @@
       "online": "接続時間",
       "remaining": "残り",
       "eta": "到着予定"
+    },
+    "settings": {
+      "title": "設定",
+      "basemap": "ベースマップ",
+      "basemapAuto": "テーマに従う",
+      "basemapDark": "ダーク",
+      "basemapLight": "ライト",
+      "basemapSatellite": "衛星",
+      "layers": "レイヤー",
+      "boundaries": "管制区境界",
+      "airportTags": "空港タグ",
+      "rangeRings": "カバー範囲",
+      "units": "単位",
+      "unitsAviation": "フィート / 海里",
+      "unitsMetric": "メートル / キロ",
+      "close": "設定を閉じる"
+    },
+    "filters": {
+      "title": "絞り込み",
+      "altitude": "高度",
+      "any": "指定なし",
+      "ground": "地上",
+      "low": "10,000 ft 未満",
+      "mid": "10,000〜24,000 ft",
+      "high": "24,000 ft 以上",
+      "departure": "出発",
+      "arrival": "到着",
+      "clear": "絞り込みを解除",
+      "active": "絞り込み中 — 地図も連動"
+    },
+    "airport": {
+      "title": "空港",
+      "departures": "出発便",
+      "arrivals": "到着便",
+      "onStation": "オンライン管制",
+      "metar": "気象",
+      "metarUnavailable": "この空港の気象を取得できません",
+      "noDepartures": "出発便なし",
+      "noArrivals": "到着便なし",
+      "noStations": "管制官はオンラインではありません",
+      "close": "閉じる"
+    },
+    "share": {
+      "copied": "リンクをコピーしました"
     }
   },
   "common": {
