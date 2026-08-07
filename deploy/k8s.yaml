@@ -12,25 +12,34 @@
 # 是那个仓库私有；can-radar 是**公开**仓库，镜像也在公开的 GHCR 上，所以它既
 # 不进 git 也不进镜像层 —— 打进去就等于把那个数据库发出去了。
 #
-# 于是运行时挂进来，NAVDATA_DIR 指过去。先建：
+# 于是运行时从一个 PVC 挂进来（下面那个），NAVDATA_DIR 指过去。
 #
-#   kubectl -n can-radar create secret generic navdata \
-#     --from-file=airways.txt.gz=<can-web>/data/navdata/airways.txt.gz \
-#     --from-file=fixes.txt.gz=<can-web>/data/navdata/fixes.txt.gz \
-#     ...（data/navdata 下的每一个 .txt.gz）
+# Secret 不行 —— 上限 1 MiB，整套 navdata 是 5.9 MB。ConfigMap 也不行，它存不
+# 了二进制而这些是 gzip。PVC 的 accessModes 是 **ReadWriteMany**：Deployment
+# 有 2 个副本，可能落在不同节点，RWO 的卷只挂得上一个节点，另一个副本会一直
+# ContainerCreating。longhorn 用 share manager 支持 RWX。
 #
-# 用 Secret 而不是 ConfigMap：ConfigMap 存不了二进制，而这些是 gzip。注意
-# Secret 有 1 MiB 的上限，整套 navdata 是 5.9 MB —— 塞不进一个 Secret。所以
-# 实际上要么拆成几个 Secret 分别挂到同一个目录，要么用一个 PVC（longhorn 在
-# 这个集群里是装好的）。**PVC 是推荐做法**，见 README。
+# 数据是手工灌进去的（起一个挂着这个 PVC 的临时 Pod，kubectl cp 进去，再删
+# 掉）。它不跟着镜像走，所以换镜像不会动它；换 AIRAC 周期时要重新灌一次。
 #
-# 挂载缺席不会让服务起不来：/api/v1/route 回 503，地图退回直飞弧线。所以第一
-# 次上线可以先不挂，把这件事和部署分开验。
+# 挂载缺席也不会让服务起不来：/api/v1/route 回 503，地图退回直飞弧线。
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: can-radar
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: navdata
+  namespace: can-radar
+spec:
+  accessModes: ["ReadWriteMany"]
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 1Gi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -47,6 +56,11 @@ spec:
       labels:
         app: can-radar
     spec:
+      volumes:
+        - name: navdata
+          persistentVolumeClaim:
+            claimName: navdata
+            readOnly: true
       containers:
         - name: app
           image: ghcr.io/jianyuelab-org/can-radar:latest
@@ -56,28 +70,12 @@ spec:
           env:
             - name: CAN_WEB_ORIGIN
               value: https://airwaysn.org
-            # NAVDATA_DIR 故意不设，navdata 也故意不挂 —— 见文件抬头。
-            # 这不是「还没做完」，是一个可以先上线的状态：/api/v1/route 回
-            # 503，地图退回直飞弧线，其余（在线飞机、席位、航迹）全都正常。
-            #
-            # 数据落到集群之后，加回这两段：
-            #
-            #   env:
-            #     - name: NAVDATA_DIR
-            #       value: /srv/navdata
-            #   volumeMounts:
-            #     - name: navdata
-            #       mountPath: /srv/navdata
-            #       readOnly: true
-            #   volumes:
-            #     - name: navdata
-            #       persistentVolumeClaim: { claimName: navdata, readOnly: true }
-            #
-            # 配套的 PVC（longhorn 是默认 StorageClass）：
-            #
-            #   accessModes: ["ReadWriteOnce"]   # 不是 ReadOnlyMany —— longhorn
-            #                                    # 的块设备不支持多节点只读挂载
-            #   resources: { requests: { storage: 1Gi } }
+            - name: NAVDATA_DIR
+              value: /srv/navdata
+          volumeMounts:
+            - name: navdata
+              mountPath: /srv/navdata
+              readOnly: true
           # 首页不碰 can-web，也不需要导航数据，所以它是个诚实的探活目标。
           # 注意它**不**能证明航路解析可用 —— navdata 没挂上时首页照样 200，
           # 只是选中飞机看不到航路。那要靠 /api/v1/route 手动验。
