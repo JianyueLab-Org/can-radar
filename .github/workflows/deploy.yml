@@ -11,6 +11,16 @@ on:
 #
 # manifest 传进去是因为它会先 apply 一次：光 set image 要求 Deployment 已经存
 # 在，第一次部署或者 namespace 被删过之后会直接失败。
+# 权限要在**调用方**声明：可复用工作流里的 permissions 是它需要什么，不是它
+# 能拿到什么。仓库默认的 GITHUB_TOKEN 只有 packages: read / deployments: none，
+# 于是被拒在启动阶段 —— 而 startup_failure 是拿不到日志的，只在网页上写一行
+# "requesting 'deployments: write, packages: write'"。can-web 的 deploy.yml
+# 顶层本来就有这一段。
+permissions:
+  contents: read
+  packages: write
+  deployments: write
+
 jobs:
   deploy:
     uses: JianyueLab-Org/actions/.github/workflows/deploy-k8s.yml@main
