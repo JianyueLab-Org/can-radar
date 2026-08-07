@@ -504,6 +504,17 @@ export function resolveRoute(input: ResolveInput): RoutePoint[] {
       }
     }
 
+    // 展开失败但这个名字**确实是一条航路**：跳过，不要当成航路点。
+    //
+    // 航路名和航路点名共用一个命名空间，而且都在全球范围内重复使用 ——
+    // `W1` 既是华东的一条航路，也是巴布亚附近的一个点。落到下面的
+    // resolveFix 就会挑中那个点，于是画出来的航线从江苏拐去巴布亚再拐回来。
+    //
+    // 展开会失败是正常的（这一段的两个端点不在库里、这条航路在本区域没有这
+    // 一段），失败时正确的动作是把它当作「这一段画不出来」而不是「这是一个
+    // 点」——两个端点本来就都会被画上，中间少几个拐点远好过多一个跨半球的。
+    if (search(data.airways, token, 1) !== -1) continue;
+
     const fix = resolveFix(data, token, lat, lon);
     if (!fix) continue;
 
