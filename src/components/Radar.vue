@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import RadarMap from "@/components/RadarMap.vue";
 import RadarDetails from "@/components/RadarDetails.vue";
+import RadarAirport from "@/components/RadarAirport.vue";
 import { getFacilityName } from "@/lib/facilities";
 import {
   altitudeColor,
@@ -250,6 +251,12 @@ const selectedStation = computed(() => {
   );
 });
 
+/** 选中的机场。`apt:` 前缀是机场标签上那个代码点出来的。 */
+const selectedAirport = computed(() => {
+  const key = selected.value;
+  return key?.startsWith("apt:") ? key.slice("apt:".length) : null;
+});
+
 const selectedIsAtis = computed(
   () =>
     !!selectedStation.value &&
@@ -463,10 +470,21 @@ watch(settings, (next) => saveSettings(next), { deep: true });
     <div class="relative flex min-h-0 flex-1">
       <!-- Backdrop for the details panel, which overlays the map on a phone -->
       <div
-        v-if="selectedPilot || selectedStation"
+        v-if="selectedPilot || selectedStation || selectedAirport"
         class="animate-overlay-in absolute inset-0 z-10 bg-gray-900/40 backdrop-blur-sm lg:hidden"
         @click="selected = null"
       ></div>
+
+      <RadarAirport
+        :messages="messages"
+        :icao="selectedAirport"
+        :pilots="data?.pilots ?? []"
+        :controllers="controllers"
+        :atis="data?.atis ?? []"
+        :theme="theme"
+        @close="selected = null"
+        @select="selected = $event"
+      />
 
       <RadarDetails
         :messages="messages"

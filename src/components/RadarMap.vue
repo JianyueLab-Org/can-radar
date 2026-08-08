@@ -430,7 +430,14 @@ function tagIcon(
     html: `<span class="radar-tag__pin"></span>
       <div class="radar-tag${chips.some((c) => c.key === selectedKey) ? " is-selected" : ""}"
         style="--radar-tag-row:${stack}">
-        ${code ? `<span class="radar-tag__code">${escapeHtml(code)}</span>` : ""}
+        ${
+          code
+            ? // 机场代码本身也是一个可点的目标：点它开机场视图，点右边的方块仍
+              // 然选那个席位。两者共用 clickedKey 的 data-key 解析，所以这里加
+              // 一个属性就够了，不需要第二条事件通路。
+              `<span class="radar-tag__code" data-key="apt:${escapeHtml(code)}">${escapeHtml(code)}</span>`
+            : ""
+        }
         <span class="radar-tag__chips">${rendered}</span>
       </div>`,
     // The tag sizes itself from its content; the CSS centres it on the point.
