@@ -5,41 +5,24 @@
 # radar.airwaysn.org 的 DNS 记录建好）。
 #
 # ---------------------------------------------------------------------------
-# 导航数据不在镜像里，这一条是这份清单最要紧的地方
+# 这里不再有导航数据
 # ---------------------------------------------------------------------------
 #
-# data/navdata 是 AIRAC 派生的商业数据。can-web 把它提交进自己仓库的唯一理由
-# 是那个仓库私有；can-radar 是**公开**仓库，镜像也在公开的 GHCR 上，所以它既
-# 不进 git 也不进镜像层 —— 打进去就等于把那个数据库发出去了。
+# 航路解析搬去 can-api 了，这个站点的 /api/v1/route 只是一个转发。原来那个
+# ReadWriteMany 的 navdata PVC 和 NAVDATA_DIR 一起去掉了 —— 这个仓库公开、镜
+# 像也在公开的 GHCR 上，一份商业 AIRAC 派生数据不该在这一侧的任何地方落地。
 #
-# 于是运行时从一个 PVC 挂进来（下面那个），NAVDATA_DIR 指过去。
+# 卷现在挂在 can-api 上，见那边的 deploy/k8s.yaml。上游没挂上时它回 503，
+# 透过来之后地图退回直飞弧线，这一侧起不起得来和它无关。
 #
-# Secret 不行 —— 上限 1 MiB，整套 navdata 是 5.9 MB。ConfigMap 也不行，它存不
-# 了二进制而这些是 gzip。PVC 的 accessModes 是 **ReadWriteMany**：Deployment
-# 有 2 个副本，可能落在不同节点，RWO 的卷只挂得上一个节点，另一个副本会一直
-# ContainerCreating。longhorn 用 share manager 支持 RWX。
-#
-# 数据是手工灌进去的（起一个挂着这个 PVC 的临时 Pod，kubectl cp 进去，再删
-# 掉）。它不跟着镜像走，所以换镜像不会动它；换 AIRAC 周期时要重新灌一次。
-#
-# 挂载缺席也不会让服务起不来：/api/v1/route 回 503，地图退回直飞弧线。
+# **删除这个命名空间里遗留的 navdata PVC 是手工的一步**：清单里没有它了，
+# apply 不会替你删。确认 can-api 那边已经灌好之后：
+#   kubectl -n can-radar delete pvc navdata
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: can-radar
----
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: navdata
-  namespace: can-radar
-spec:
-  accessModes: ["ReadWriteMany"]
-  storageClassName: longhorn
-  resources:
-    requests:
-      storage: 1Gi
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -56,11 +39,6 @@ spec:
       labels:
         app: can-radar
     spec:
-      volumes:
-        - name: navdata
-          persistentVolumeClaim:
-            claimName: navdata
-            readOnly: true
       containers:
         - name: app
           image: ghcr.io/jianyuelab-org/can-radar:latest
@@ -72,15 +50,9 @@ spec:
             # 只是主机。
             - name: CAN_API_ORIGIN
               value: https://api.airwaysn.org
-            - name: NAVDATA_DIR
-              value: /srv/navdata
-          volumeMounts:
-            - name: navdata
-              mountPath: /srv/navdata
-              readOnly: true
-          # 首页不碰 can-web，也不需要导航数据，所以它是个诚实的探活目标。
-          # 注意它**不**能证明航路解析可用 —— navdata 没挂上时首页照样 200，
-          # 只是选中飞机看不到航路。那要靠 /api/v1/route 手动验。
+          # 首页不碰 can-web，所以它是个诚实的探活目标。注意它**不**能证明航
+          # 路解析可用 —— can-api 那边没挂上导航数据时首页照样 200，只是选中
+          # 飞机看不到航路。那要靠 /api/v1/route 手动验。
           readinessProbe:
             httpGet:
               path: /

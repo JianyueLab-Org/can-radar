@@ -1,0 +1,700 @@
+/* ===========================================================================
+   雷达站的外观层 —— 照 VATSIM Radar（github.com/VATSIM-Radar/vatsim-radar）
+   那一套来。
+   ---------------------------------------------------------------------------
+   为什么是一份**独立**的样式表，而不是去改 globals.css：
+
+   `globals.css` 是 can-web 那份设计系统的镜像，三个站共用，改动要发生在
+   can-web 再同步过来（见 CLAUDE.md）。雷达站的重构只动这一个站的皮，不该把
+   另外两个站拖下水 —— 所以这里不碰那份文件一个字，只在它**之后**加载一层，
+   把语义记号重新指向另一套值。
+
+   这样做的好处是覆盖面：`bg-surface-raised`、`text-muted`、`.btn`、`.input`、
+   `.badge-*` 这些既有的类名照样能用，只是解析出来的颜色、圆角和边框换了一套。
+   没有被重写的组件也跟着变了样子，不会留下半新半旧的拼接感。
+
+   两条实现上的注意：
+
+   1. **这份文件里没有 Tailwind 的 at-rule。** 没有 `@theme`，也没有
+      `@layer`。`@theme` 只有在 Tailwind 处理的那个入口里才展开，而这份文件是
+      挂在 globals.css 后面的普通样式表；写了也不会生效，反而像是能用。
+   2. **不进任何 `@layer`，正是它能覆盖的原因。** Tailwind v4 把 `@theme` 的
+      产物和 `@layer components` 里的 `.btn` 都放进了级联层，而未分层的规则在
+      级联里排在所有分层规则**之上** —— 与选择器权重无关。所以下面的
+      `:root` 能盖掉 `--radius-control`，`.btn` 能盖掉组件层那一份，不需要一个
+      `!important`。
+
+   配色取自 vatsim-radar 的 `app/utils/colors.ts` 和 `app/scss/variables.scss`：
+   近黑的层级面、1px 发丝边框、4px/8px 的小圆角。**唯一没有照搬的是品牌色** ——
+   那边是 `blue500 #3B6CEC`，这里仍然用 CAN 自己的 #4c92c1。三个站刚统一到网络
+   自己的标识上，为了套一层皮把品牌色也换掉是本末倒置；换回去也只是下面
+   `--vr-brand` 这几行。
+   =========================================================================== */
+
+/* ---------------------------------------------------------------------------
+   记号
+--------------------------------------------------------------------------- */
+
+:root {
+  /* 字族。Libre Franklin / Jura / Roboto Mono 都没有汉字和假名，而这个站要渲染
+     四种语言 —— 所以每一条链后面都留着系统的 CJK 字体，拉丁字形来自 webfont，
+     汉字落回系统。字体文件由 @fontsource 自托管（见 BaseLayout.astro），不走
+     CDN：这个网络的用户大半在墙内，一个连不上的 fonts.gstatic.com 就是三秒的
+     白屏。 */
+  --vr-font-sans:
+    "Libre Franklin", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei",
+    "Noto Sans CJK SC", sans-serif;
+  /* 小号全大写的标签用 Jura —— vatsim-radar 的 `3b-medium-alt` / `caption-
+     medium-alt`。它窄、字怀开，全大写挤在一起也不糊。 */
+  --vr-font-alt:
+    Jura, "Libre Franklin", ui-sans-serif, system-ui, "PingFang SC",
+    "Microsoft YaHei", sans-serif;
+  /* 数字一律等宽：高度、速度、频率在列表里要对得齐。 */
+  --vr-font-mono:
+    "Roboto Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+    monospace;
+
+  /* 品牌。见文件头：这一组是 CAN 的，不是 vatsim-radar 的蓝。 */
+  --vr-brand: #4c92c1;
+  --vr-brand-hover: #6aa8cd;
+  --vr-brand-active: #3a7ba8;
+  --vr-brand-rgb: 76 146 193;
+
+  /* 席位色。这一组**是**照搬的（variables.scss 的 $delColor … $atisColor）：
+     它不是装饰而是约定，管制员在别处已经读惯了这套对应关系。 */
+  --vr-del: #458cff;
+  --vr-gnd: #4a9c25;
+  --vr-twr: #d32c00;
+  --vr-app: #ee7901;
+  --vr-ctr: #33b69c;
+  --vr-atis: #d88500;
+
+  /* 状态 */
+  --vr-success: #4a9c25;
+  --vr-warning: #ffa940;
+  --vr-danger: #d32c00;
+  --vr-info: #458cff;
+
+  /* 层级面 —— 浅色。vatsim-radar 的浅色主题是把灰阶整个翻过来，同一套记号名
+     两边都成立，所以这里只写值，不写第二套名字。 */
+  --vr-bg: #fafafa;
+  --vr-l1: #fdfdfd;
+  --vr-l2: #f6f6f6;
+  --vr-l3: #eeeeee;
+  --vr-l4: #e7e7e7;
+  --vr-l5: #e0e0e0;
+  --vr-stroke: #d9d9d9;
+  --vr-stroke-2: #cbcbcb;
+
+  --vr-t1: #1a1a1a;
+  --vr-t2: #2c2c2c;
+  --vr-t3: #4a4a4a;
+
+  /* 半透明的叠色，用来做 hover / 分隔线 —— 比再挑一档灰更稳，因为它在任何
+     底色上都成立。 */
+  --vr-alpha-2: rgb(21 21 21 / 0.02);
+  --vr-alpha-4: rgb(21 21 21 / 0.04);
+  --vr-alpha-8: rgb(21 21 21 / 0.08);
+  --vr-alpha-12: rgb(21 21 21 / 0.12);
+  --vr-alpha-24: rgb(21 21 21 / 0.24);
+
+  --vr-shadow: 0 8px 24px -8px rgb(21 21 21 / 0.25);
+
+  /* ——— 下面是把既有语义记号重新指过来 ——— */
+
+  --background: var(--vr-bg);
+  --foreground: var(--vr-t2);
+
+  --surface: var(--vr-bg);
+  --surface-raised: var(--vr-l1);
+  --surface-sunken: var(--vr-l3);
+  --surface-overlay: var(--vr-l1);
+  --chrome: rgb(250 250 250 / 0.9);
+  --border-subtle: var(--vr-stroke);
+  --border-strong: var(--vr-stroke-2);
+  --ring-brand: rgb(var(--vr-brand-rgb) / 0.32);
+
+  --color-airwaysn: var(--vr-brand);
+  --color-airwaysn-dark: var(--vr-brand-active);
+
+  --color-ink: var(--vr-t1);
+  --color-muted: var(--vr-t3);
+  --color-faint: color-mix(in srgb, var(--vr-t3) 65%, var(--vr-bg));
+
+  --color-success: var(--vr-success);
+  --color-danger: var(--vr-danger);
+  --color-warning: #b45309;
+  --color-info: var(--vr-brand);
+
+  --color-success-bg: color-mix(in srgb, var(--vr-success) 14%, transparent);
+  --color-success-fg: #2b6113;
+  --color-danger-bg: color-mix(in srgb, var(--vr-danger) 14%, transparent);
+  --color-danger-fg: #931b00;
+  --color-warning-bg: color-mix(in srgb, var(--vr-warning) 18%, transparent);
+  --color-warning-fg: #854600;
+  --color-info-bg: rgb(var(--vr-brand-rgb) / 0.14);
+  --color-info-fg: var(--vr-brand-active);
+  --color-neutral-bg: var(--vr-alpha-8);
+  --color-neutral-fg: var(--vr-t2);
+
+  /* 小圆角是这套设计最认得出来的一个特征：按钮和输入框 4px，浮层 8px。
+     can-web 那份是 8px / 14px，圆得多。 */
+  --radius-control: 4px;
+  --radius-card: 8px;
+
+  --shadow-card: none;
+  --shadow-card-hover: none;
+  --shadow-popover: var(--vr-shadow);
+}
+
+:root.dark {
+  --vr-bg: #151515;
+  --vr-l1: #1a1a1a;
+  --vr-l2: #1e1e1e;
+  --vr-l3: #232323;
+  --vr-l4: #272727;
+  --vr-l5: #2c2c2c;
+  --vr-stroke: #313131;
+  --vr-stroke-2: #3a3a3a;
+
+  --vr-t1: #f6f6f6;
+  --vr-t2: #e0e0e0;
+  --vr-t3: #c4c4c4;
+
+  --vr-alpha-2: rgb(250 250 250 / 0.02);
+  --vr-alpha-4: rgb(250 250 250 / 0.04);
+  --vr-alpha-8: rgb(250 250 250 / 0.08);
+  --vr-alpha-12: rgb(250 250 250 / 0.12);
+  --vr-alpha-24: rgb(250 250 250 / 0.24);
+
+  --vr-shadow: 0 8px 24px -8px rgb(0 0 0 / 0.7);
+
+  --chrome: rgb(21 21 21 / 0.9);
+
+  /* 深色下 muted 用 t3、faint 再降一档 —— 混向背景而不是换一个色相，避免
+     在近黑面上泛出蓝灰。 */
+  --color-faint: color-mix(in srgb, var(--vr-t3) 55%, var(--vr-bg));
+
+  --color-warning: var(--vr-warning);
+  --color-info: var(--vr-del);
+
+  --color-success-fg: #80fc49;
+  --color-danger-fg: #ff967f;
+  --color-warning-fg: #ffd390;
+  --color-info-fg: #92c7ff;
+  --color-neutral-fg: var(--vr-t2);
+
+  --color-airwaysn: var(--vr-brand-hover);
+}
+
+/* ---------------------------------------------------------------------------
+   基底
+--------------------------------------------------------------------------- */
+
+body {
+  font-family: var(--vr-font-sans);
+  /* vatsim-radar 的正文行高是 130%，字重 500 —— 界面上几乎没有长句，都是短
+     标签和数字，所以偏紧、偏实。 */
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: normal;
+}
+
+/* 标题不再收字距：Libre Franklin 本身就窄，再收就挤。 */
+h1,
+h2,
+h3 {
+  letter-spacing: -0.01em;
+}
+
+/* 滚动条按 vatsim-radar 的做法收窄，槽用当前面的底色 —— 面板里那条浅色的槽
+   在近黑背景上比滑块本身还显眼。 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--vr-stroke-2) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 10px;
+  background-color: var(--vr-stroke-2);
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--vr-t3);
+}
+
+::selection {
+  background: rgb(var(--vr-brand-rgb) / 0.3);
+}
+
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--vr-brand);
+  outline-offset: 1px;
+  border-radius: var(--radius-control);
+}
+
+/* ---------------------------------------------------------------------------
+   既有组件类的改写。
+
+   这些类名 can-web 也有，这里换的是**样子**不是名字 —— 没被重写的岛屿照旧
+   写 `.btn .btn-secondary`，出来就已经是新的样子了。
+--------------------------------------------------------------------------- */
+
+.btn {
+  gap: 0.75rem;
+  min-height: 40px;
+  padding: 8px 20px;
+  border: none;
+  border-radius: var(--radius-control);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: normal;
+  box-shadow: none;
+  transition:
+    background-color 0.3s ease,
+    color 0.3s ease;
+}
+/* 按下去整个按钮往下跳一像素是 can-web 的手势，这套设计里没有 —— 它只换底色。 */
+.btn:active:not(:disabled) {
+  transform: none;
+}
+.btn:focus-visible {
+  outline: 2px solid var(--vr-brand);
+  outline-offset: 1px;
+  box-shadow: none;
+}
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.24;
+}
+
+.btn-primary {
+  background-color: var(--vr-brand);
+  color: #fff;
+  box-shadow: none;
+}
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--vr-brand-hover);
+  color: #fff;
+}
+
+.btn-secondary {
+  border: none;
+  background-color: transparent;
+  color: var(--vr-t2);
+}
+.btn-secondary:hover:not(:disabled) {
+  border: none;
+  background-color: var(--vr-alpha-8);
+  color: var(--vr-t1);
+}
+
+.btn-soft {
+  background-color: var(--vr-l3);
+  color: var(--vr-t2);
+}
+.btn-soft:hover:not(:disabled) {
+  background-color: var(--vr-l4);
+}
+
+.btn-ghost {
+  background-color: transparent;
+  color: var(--vr-t3);
+}
+.btn-ghost:hover:not(:disabled) {
+  background-color: var(--vr-alpha-8);
+  color: var(--vr-t1);
+}
+
+.btn-danger {
+  background-color: transparent;
+  color: var(--vr-danger);
+}
+.btn-danger:hover:not(:disabled) {
+  background-color: color-mix(in srgb, var(--vr-danger) 12%, transparent);
+  color: var(--vr-danger);
+}
+
+.card {
+  border: 1px solid var(--vr-stroke);
+  border-radius: var(--radius-card);
+  background-color: var(--vr-bg);
+  box-shadow: none;
+}
+
+.input {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--vr-stroke);
+  border-radius: var(--radius-control);
+  background-color: var(--vr-l2);
+  color: var(--vr-t1);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+.input:hover:not(:disabled):not(:focus) {
+  border-color: var(--vr-stroke-2);
+}
+.input:focus {
+  border-color: var(--vr-brand);
+  box-shadow: none;
+}
+.input::placeholder {
+  color: var(--color-faint);
+  font-weight: 400;
+}
+
+/* select 的下拉箭头由浏览器画，深色下它跟着 color-scheme 走 —— globals.css
+   已经设了 color-scheme，这里只要不去 appearance:none 就是对的。 */
+select.input {
+  padding-right: 8px;
+}
+
+.badge {
+  gap: 4px;
+  /* 圆角胶囊换成 4px 的方角：这套设计里没有一个胶囊。 */
+  border-radius: var(--radius-control);
+  padding: 2px 6px;
+  font-family: var(--vr-font-alt);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.link {
+  color: var(--vr-brand);
+  text-decoration: underline;
+  text-decoration-style: solid;
+  text-decoration-color: color-mix(in srgb, var(--vr-brand) 55%, transparent);
+}
+.link:hover {
+  color: var(--vr-brand-hover);
+}
+
+.skeleton {
+  border-radius: var(--radius-control);
+  background-color: var(--vr-l3);
+}
+
+/* ---------------------------------------------------------------------------
+   排版。vatsim-radar 的 UiText 是一个组件，这里做成类 —— 因为它一半的用处在
+   Astro 的静态标记里，那里没有岛屿可以挂。名字照抄那边的 type 值，方便对读。
+--------------------------------------------------------------------------- */
+
+.vr-h1 {
+  font-size: 32px;
+}
+.vr-h2 {
+  font-size: 28px;
+}
+.vr-h3 {
+  font-size: 24px;
+  text-transform: uppercase;
+}
+.vr-h4 {
+  font-size: 20px;
+  text-transform: uppercase;
+}
+.vr-h5 {
+  font-size: 16px;
+}
+.vr-h1,
+.vr-h2,
+.vr-h3,
+.vr-h4,
+.vr-h5 {
+  margin: 0;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+
+.vr-1b {
+  font-size: 16px;
+}
+.vr-2b {
+  font-size: 14px;
+}
+.vr-2b-medium {
+  font-size: 14px;
+  font-weight: 600;
+}
+.vr-3b {
+  font-size: 12px;
+}
+.vr-3b-medium {
+  font-size: 12px;
+  font-weight: 600;
+}
+.vr-1b,
+.vr-2b,
+.vr-2b-medium,
+.vr-3b,
+.vr-3b-medium {
+  font-weight: 500;
+  line-height: 1.3;
+}
+.vr-2b-medium,
+.vr-3b-medium {
+  font-weight: 600;
+}
+
+.vr-caption {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+/* `-alt` 是 Jura 的全大写小标签 —— 分区标题、单位、席位代号都用它。 */
+.vr-label {
+  font-family: var(--vr-font-alt);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 0.9;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.vr-label-sm {
+  font-family: var(--vr-font-alt);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 0.9;
+  text-transform: uppercase;
+}
+
+.vr-mono {
+  font-family: var(--vr-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------------------
+   浮层内部的数据排版。
+
+   vatsim-radar 的 `__grid-info-sections`：左边一列窄的全大写标签，右边是值。
+   **不是**两端对齐 —— 那样每一行的值都从不同的地方开始，一列数字读下来是锯齿
+   状的。固定比例的网格让值左对齐成一列。
+--------------------------------------------------------------------------- */
+
+.vr-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vr-row {
+  display: grid;
+  grid-template-columns: minmax(0, 34%) minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.vr-row_k {
+  font-family: var(--vr-font-alt);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--color-faint);
+  text-transform: uppercase;
+}
+
+.vr-row_v {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--vr-t1);
+  overflow-wrap: anywhere;
+}
+
+/* 一整行的值（航路、备注这种），标签在上、值在下。 */
+.vr-row--stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* 并排的小方块，用来放三四个一眼扫过去的数字（高度、地速、航向）。 */
+.vr-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.vr-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+
+  padding: 6px 8px;
+  border-radius: var(--radius-control);
+
+  background: var(--vr-alpha-4);
+}
+
+.vr-tile_k {
+  font-family: var(--vr-font-alt);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--color-faint);
+  text-transform: uppercase;
+}
+
+.vr-tile_v {
+  font-family: var(--vr-font-mono);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.1;
+  color: var(--vr-t1);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 席位色块。地图上的标签和面板里的列表用同一个形状，所以点开一张卡之后还认得
+   出它对应地图上哪一块颜色。 */
+.vr-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 1px 5px;
+  border-radius: 3px;
+
+  font-family: var(--vr-font-alt);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #fff;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ---------------------------------------------------------------------------
+   Leaflet。
+
+   globals.css 底部那一大块 Leaflet 规则是从 can-web 整份搬来的，写死了
+   slate 系的颜色，还有一堆 `.dark .leaflet-popup .text-gray-500` 这种针对
+   旧版弹窗标记的补丁。那些标记这次全没了（弹窗改由 Vue 的浮层渲染），所以
+   这里不是去逐条覆盖它们，而是把**还在用的**几件重新定义一遍。
+--------------------------------------------------------------------------- */
+
+.leaflet-container {
+  background: var(--vr-bg) !important;
+  font-family: var(--vr-font-sans) !important;
+}
+:root:not(.dark) .leaflet-container {
+  background: var(--vr-bg) !important;
+}
+
+/* 缩放控件由 MapControls 那一列按钮取代了，Leaflet 自带的那个不再出现；
+   万一某处还开着，至少让它不是白底圆角。 */
+.leaflet-control-zoom {
+  display: none !important;
+}
+
+/* 版权条。
+
+   `:root` 那一层不是装饰 —— globals.css 里有
+   `.dark .leaflet-control-attribution { … !important }` 和它的浅色对应，权重
+   (0,2,0)；不加前缀的话这几条 (0,1,0) 永远赢不了，版权条会留着 can-web 那套
+   slate 配色。加上之后两边同权重，而这份样式表在后面。 */
+:root .leaflet-control-attribution {
+  padding: 2px 6px !important;
+  border-radius: var(--radius-control) 0 0 0 !important;
+  font-family: var(--vr-font-sans) !important;
+  font-size: 10px !important;
+  line-height: 1.5 !important;
+  color: var(--color-faint) !important;
+  background: color-mix(in srgb, var(--vr-bg) 80%, transparent) !important;
+}
+:root .leaflet-control-attribution a {
+  color: var(--vr-t3) !important;
+  text-decoration: none !important;
+}
+:root .leaflet-control-attribution a:hover {
+  text-decoration: underline !important;
+}
+
+/* 窄屏上这一串会折成三行，把地图底部整块吃掉。给它一个上限，剩下的横向滚 ——
+   授权要求的是署名出现在展示它的地方，不是它必须一次全部铺开。 */
+@media (max-width: 767px) {
+  :root .leaflet-control-attribution {
+    max-width: calc(100vw - 16px);
+    max-height: 2.6em;
+    overflow: auto hidden;
+    white-space: nowrap;
+  }
+}
+
+/* 地图上的标记外壳一律透明 —— 内容是 divIcon 里的自绘标签。 */
+.custom-marker,
+.aircraft-marker,
+.vr-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Leaflet 的原生 popup 这次不用了（选中的东西一律走右侧浮层），
+   留一条兜底样式，免得哪天有人加回来时是一块刺眼的白。 */
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  border: 1px solid var(--vr-stroke) !important;
+  border-radius: var(--radius-card) !important;
+  color: var(--vr-t2) !important;
+  background: var(--vr-bg) !important;
+  box-shadow: var(--vr-shadow) !important;
+}
+.leaflet-popup-content {
+  margin: 10px 12px;
+  font-size: 12px;
+}
+
+/* ---------------------------------------------------------------------------
+   动效。vatsim-radar 的过渡一律 0.3s，浮层从右侧推入。
+--------------------------------------------------------------------------- */
+
+@keyframes vr-slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes vr-slide-in-bottom {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.vr-appear-right {
+  animation: vr-slide-in-right 0.3s ease both;
+}
+.vr-appear-bottom {
+  animation: vr-slide-in-bottom 0.3s ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vr-appear-right,
+  .vr-appear-bottom {
+    animation: none;
+  }
+}

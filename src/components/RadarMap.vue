@@ -20,10 +20,18 @@
  */
 import { onMounted, onBeforeUnmount, ref, watch } from "vue";
 import L from "leaflet";
-import "leaflet/dist/leaflet.css";
+/* leaflet.css **不在这里引**，在 BaseLayout.astro 里，排在 vr-theme.css 前面。
+ *
+ * 从这里引的话，它是这个岛屿的一个动态样式表，浏览器会在组件加载时把它插到
+ * <head> 的最后 —— 也就是排在整站样式的**后面**。于是 Leaflet 自己那份
+ * `.leaflet-control-attribution a { color: #0078A8 }` 会赢过外观层同权重的那条，
+ * 版权条上留着一串默认的亮蓝色链接和一块白底比例尺。改成在布局里引，顺序就由
+ * 我们说了算。 */
 import { airportAt, loadAirports } from "@/lib/airports";
 import { getFacilityName } from "@/lib/facilities";
 import {
+  AREA_COLORS,
+  ROUTE_COLORS,
   altitudeColor,
   distanceNm,
   escapeHtml,
@@ -951,19 +959,24 @@ async function syncTracons() {
  * Boundaries — built once, restyled per poll
  * ------------------------------------------------------------------ */
 
+/* 两套边界样式。颜色来自 AREA_COLORS（见 lib/radar.ts 里为什么是字面量），而
+ * 「没人管」那一套跟主题走，所以它是函数而不是常量 —— 主题一换，下面那个
+ * watch 会把所有多边形重新上一遍色。 */
 const ACTIVE_STYLE: L.PathOptions = {
-  color: "#10B981",
+  color: AREA_COLORS.active,
   weight: 2,
   opacity: 0.8,
   fillOpacity: 0.1,
-  fillColor: "#10B981",
+  fillColor: AREA_COLORS.active,
 };
-const INACTIVE_STYLE: L.PathOptions = {
-  color: "#6B7280",
-  weight: 1,
-  opacity: 0.22,
-  fillOpacity: 0,
-};
+function inactiveStyle(): L.PathOptions {
+  return {
+    color: AREA_COLORS.idle[props.theme],
+    weight: 1,
+    opacity: 0.55,
+    fillOpacity: 0,
+  };
+}
 
 /**
  * Unstaffed FIRs live in their own layer, off the map below this zoom.
@@ -1008,8 +1021,34 @@ function worksOceanic(callsign: string): boolean {
     .some((part) => part === "O" || part === "OCN" || part === "OCEANIC");
 }
 
+/**
+ * 空闲时不画的那些边界 —— 被拆开的扇区。
+ *
+ * `boundaries.geojson` 里 768 个要素中有 343 个是扇区划分（`ADR-E`、`BIRD-N`
+ * 这样），它们**画在自己所属 FIR 的多边形之上**。全部铺开的结果是每个被拆过的
+ * FIR 都有一圈外框加两到五条内部分割线，叠成一张网 —— 这就是那片杂乱。
+ *
+ * 判据是「父 FIR 也在这份数据里」，不是「id 里有连字符」。有 22 个子扇区找不到
+ * 父要素（`TEH-*`、`LGMD-*`，以及**这张网络自己的 `ZJSY-*` 三亚**），按连字符
+ * 一刀切会让那几块空域整个消失。
+ *
+ * 只影响**空闲**图层：一旦有人上了某个扇区，syncBoundaries 会把它挪进
+ * boundariesLayer 照常高亮 —— 「这块被拆开的空域现在有人管」恰恰是必须画出来的
+ * 那种信息。
+ */
+const idleHiddenBoundaries = new Set<string>();
+
 function buildBoundaries(data: GeoJSON.FeatureCollection) {
   if (!quietBoundariesLayer) return;
+
+  const rawIds = new Set<string>();
+  for (const feature of data.features) {
+    const id =
+      feature.properties?.ID ||
+      feature.properties?.id ||
+      feature.properties?.name;
+    if (id) rawIds.add(String(id));
+  }
 
   for (const feature of data.features) {
     const boundaryId =
@@ -1020,15 +1059,17 @@ function buildBoundaries(data: GeoJSON.FeatureCollection) {
 
     knownBoundaryIds.add(String(boundaryId).toLowerCase());
 
-    const key = boundaryKey(
-      String(boundaryId),
-      String(feature.properties?.oceanic) === "1",
-    );
-    const shape = L.geoJSON(feature, { style: INACTIVE_STYLE });
+    const raw = String(boundaryId);
+    const key = boundaryKey(raw, String(feature.properties?.oceanic) === "1");
+
+    const parent = raw.includes("-") ? raw.slice(0, raw.indexOf("-")) : null;
+    if (parent && rawIds.has(parent)) idleHiddenBoundaries.add(key);
+
+    const shape = L.geoJSON(feature, { style: inactiveStyle() });
     const shapes = boundaryShapes.get(key) ?? [];
     shapes.push(shape);
     boundaryShapes.set(key, shapes);
-    quietBoundariesLayer.addLayer(shape);
+    if (!idleHiddenBoundaries.has(key)) quietBoundariesLayer.addLayer(shape);
   }
 }
 
@@ -1123,11 +1164,15 @@ function syncBoundaries() {
     if (isActive === wasActive) continue;
 
     for (const shape of shapes) {
-      shape.setStyle(isActive ? ACTIVE_STYLE : INACTIVE_STYLE);
+      shape.setStyle(isActive ? ACTIVE_STYLE : inactiveStyle());
       // A staffed sector is always drawn; an unstaffed one is subject to the
       // zoom filter, so the two live in different layers.
       (isActive ? quietBoundariesLayer : boundariesLayer)?.removeLayer(shape);
-      (isActive ? boundariesLayer : quietBoundariesLayer)?.addLayer(shape);
+      // 空闲的扇区划分不画回去（见 idleHiddenBoundaries）—— 少了这个判断，一个
+      // 上过线又下线的扇区就会作为一条内部分割线永久留在图上。
+      if (isActive) boundariesLayer?.addLayer(shape);
+      else if (!idleHiddenBoundaries.has(boundaryId))
+        quietBoundariesLayer?.addLayer(shape);
       shape.off("click");
       if (isActive) {
         // Selecting the sector selects whoever is working it, so the details
@@ -1482,7 +1527,7 @@ async function drawRoute() {
   if (routeKey !== wanted) loadRoute(wanted, plan);
 
   const position: LatLon = [pilot.latitude, pilot.longitude];
-  const color = props.theme === "dark" ? "#94a3b8" : "#475569";
+  const color = ROUTE_COLORS[props.theme];
   const arrival = airportAt(plan.arrival);
 
   const ahead =
@@ -1558,7 +1603,6 @@ function drawRouteLine(ahead: RoutePoint[], position: LatLon, color: string) {
 }
 
 /** How many waypoints one airway label is expected to cover. */
-const VIA_LABEL_SPACING = 12;
 
 /**
  * Name each stretch of line that was flown along something — `W47`, `BOTP2G`.
@@ -1572,39 +1616,33 @@ const VIA_LABEL_SPACING = 12;
 function drawViaLabels(ahead: RoutePoint[], position: LatLon, color: string) {
   if (!routeLayer) return;
 
-  for (let start = 0; start < ahead.length; ) {
-    const via = ahead[start].via;
-    let end = start;
-    while (end + 1 < ahead.length && ahead[end + 1].via === via) end++;
+  /* 每一段都标，而不是一条航路只标两三处。
+   *
+   * 原来是按一个固定间距在一段长航路上均匀撒几个标签，于是「这一段是哪
+   * 条航路」这个问题，在两个标签之间的那些腿上是答不出来的 —— 而那正是有人放大
+   * 去看某一个航路点时所在的位置。
+   *
+   * **进离场程序不标。** 一条 SID 有十几条腿，每条都写一遍 LEKE1D 就是在同一个
+   * 词上堆十几个标签，而它们本来就挤在机场周围最小的那块地方。程序的名字在详情
+   * 卡的飞行计划里，那里只需要出现一次。
+   *
+   * 密度由缩放级别兜着（.show-via-labels，见 applyLabelFilter）：拉远到看不清
+   * 的时候整批标签都不画。 */
+  let from: LatLon = position;
 
-    if (!via) {
-      start = end + 1;
-      continue;
+  for (const point of ahead) {
+    const to: LatLon = [point.lat, point.lon];
+    const procedure = point.kind === "sid" || point.kind === "star";
+
+    if (point.via && !procedure) {
+      viaLabel(
+        [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2],
+        point.via,
+        color,
+      ).addTo(routeLayer);
     }
 
-    // The run's line starts at whatever it was joined from — the fix before
-    // it, or the aircraft when the route is already inside the airway.
-    const from: LatLon =
-      start === 0 ? position : [ahead[start - 1].lat, ahead[start - 1].lon];
-    const legs: LatLon[] = [
-      from,
-      ...ahead.slice(start, end + 1).map((p) => [p.lat, p.lon] as LatLon),
-    ];
-
-    const labels = Math.max(
-      1,
-      Math.round((legs.length - 1) / VIA_LABEL_SPACING),
-    );
-    for (let i = 0; i < labels; i++) {
-      const leg = Math.floor(((i + 0.5) * (legs.length - 1)) / labels);
-      const a = legs[leg];
-      const b = legs[leg + 1] ?? legs[leg];
-      viaLabel([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], via, color).addTo(
-        routeLayer,
-      );
-    }
-
-    start = end + 1;
+    from = to;
   }
 }
 
@@ -1635,7 +1673,7 @@ function fixDot(point: RoutePoint, color: string): L.Marker {
     icon: L.divIcon({
       className: "radar-tag-icon",
       html: `<div class="radar-fix${terminal ? " radar-fix--terminal" : ""}" style="--radar-fix-color:${color}">
-          <span class="radar-fix__dot"></span
+          <svg class="radar-fix__dot" viewBox="0 0 10 9" aria-hidden="true"><path d="M5 .6 9.5 8.4H.5z"/></svg
           ><span class="radar-fix__name">${escapeHtml(point.ident)}</span>
         </div>`,
       iconSize: [0, 0],
@@ -1778,7 +1816,43 @@ watch(
   },
 );
 
-defineExpose({ focus });
+/* ------------------------------------------------------------------ *
+ * 地图控件的接口
+ *
+ * Leaflet 自带的 `+ / −` 控件被关掉了（`zoomControl: false`），换成左下角那一
+ * 列和别的按钮同一套样子的方块 —— 照 vatsim-radar 的 `MapControls`。控件是外面
+ * 那个组件，所以缩放要从这里露出去。
+ *
+ * `zoom` 是一个 ref 而不是一个函数：按钮到了上下限要变灰，那需要一个会触发重新
+ * 渲染的值，`map.getZoom()` 不会。
+ * ------------------------------------------------------------------ */
+
+const zoom = ref(0);
+const zoomRange = ref<[min: number, max: number]>([0, 18]);
+
+function syncZoomState() {
+  if (!map) return;
+  zoom.value = map.getZoom();
+  zoomRange.value = [map.getMinZoom(), map.getMaxZoom()];
+}
+
+function zoomBy(delta: number) {
+  if (!map || map.getZoom() === undefined) return;
+  const [min, max] = zoomRange.value;
+  const next = Math.min(max, Math.max(min, map.getZoom() + delta));
+  if (next === map.getZoom()) return;
+  map.setZoom(next, { animate: true });
+}
+
+defineExpose({
+  focus,
+  zoom,
+  zoomRange,
+  zoomIn: () => zoomBy(1),
+  zoomOut: () => zoomBy(-1),
+  /** 把视野拉回到当前所有交通上。 */
+  fitAll: () => fitToTraffic(true),
+});
 
 /* ------------------------------------------------------------------ *
  * Lifecycle
@@ -1828,8 +1902,9 @@ function rescaleIcons() {
   }
 }
 
-function fitToTraffic() {
-  if (!map || didInitialFit) return;
+function fitToTraffic(force = false) {
+  if (!map) return;
+  if (didInitialFit && !force) return;
   const points: L.LatLngExpression[] = [];
   for (const pilot of props.pilots) {
     if (Number.isFinite(pilot.latitude) && Number.isFinite(pilot.longitude)) {
@@ -1859,7 +1934,9 @@ onMounted(async () => {
   map = L.map(mapContainer.value, {
     center: hasShared ? [shared!.lat!, shared!.lon!] : [35.0, 105.0],
     zoom: hasShared ? shared!.zoom! : 4,
-    zoomControl: true,
+    // 缩放交给左下角那一列自绘按钮（见 defineExpose 上方的说明）。Leaflet 自带
+    // 的控件是一块白色圆角，和这套近黑的设计对不上，两套按钮并排更难看。
+    zoomControl: false,
     preferCanvas: true,
     // Keep the world inside the frame vertically: no dragging the map off the
     // top or bottom to leave a band of page showing.
@@ -1890,7 +1967,8 @@ onMounted(async () => {
     ...tileOptions(),
   }).addTo(map);
 
-  L.control.scale({ imperial: false, position: "bottomleft" }).addTo(map);
+  // 比例尺挪到右下角：左下角现在是那一列控件的位置。
+  L.control.scale({ imperial: false, position: "bottomright" }).addTo(map);
 
   // 视口回报给上层写进 URL。moveend 而不是 move：拖动过程中每帧都写一次地址栏，
   // 既没意义又会让浏览器忙着做无用功。
@@ -1927,7 +2005,9 @@ onMounted(async () => {
     applyBoundaryFilter();
     applyLabelFilter();
     rescaleIcons();
+    syncZoomState();
   });
+  syncZoomState();
   // Clicking empty map clears the selection, the way the list expects.
   map.on("click", () => emit("select", null));
 
@@ -1975,6 +2055,9 @@ watch(
     rescaleIcons();
     drawTrail();
     drawRoute();
+    // 没人管的那些边界的颜色跟着主题走（AREA_COLORS.idle），所以主题一换要重新
+    // 上色 —— 少了这一句，从深色切到浅色之后那张网还是深色那一版的灰。
+    syncBoundaries();
   },
 );
 
@@ -2009,63 +2092,64 @@ onBeforeUnmount(() => {
 </template>
 
 <style>
-/* Hover labels. The Leaflet block in globals.css is intentionally frozen, so
-   the tooltip skin lives with the component that introduces it. */
+/* ---------------------------------------------------------------------------
+   地图上的字。
+
+   全部改成 vr-theme.css 的记号 —— 原来这里写死的是 slate 系（#0f172a /
+   #e2e8f0），那是 can-web 的配色。地图是这个站唯一的主体，标签的底色和面板的底
+   色差一点点就会看出来是两套东西拼的。
+
+   两个不跟主题走的例外，写在下面各自的注释里。
+--------------------------------------------------------------------------- */
+
+/* 悬停标签。globals.css 底部那块 Leaflet 规则是刻意冻住的，所以 tooltip 的皮
+   跟着引入它的组件走。 */
 .leaflet-tooltip {
   padding: 2px 6px;
-  border: none;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.95);
-  color: #0f172a;
+  border: 1px solid var(--vr-stroke);
+  border-radius: var(--radius-control);
+  background: var(--vr-bg);
+  color: var(--vr-t1);
+  font-family: var(--vr-font-sans);
   font-size: 11px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+  font-weight: 500;
+  box-shadow: var(--vr-shadow);
 }
 
 .leaflet-tooltip-top::before {
-  border-top-color: rgba(255, 255, 255, 0.95);
+  border-top-color: var(--vr-stroke);
 }
 
-.dark .leaflet-tooltip {
-  background: rgba(30, 41, 59, 0.96);
-  color: #f1f5f9;
-}
+/* 呼号，跟在飞机旁边，由缩放级别的过滤器决定露不露，而不是每个标记重建一次。
 
-.dark .leaflet-tooltip-top::before {
-  border-top-color: rgba(30, 41, 59, 0.96);
-}
-
-/* Callsigns beside the aircraft, revealed by the zoom filter rather than
-   rebuilt per marker. */
+   等宽字：一屏上几十个呼号竖着排下来，比例字宽的话每一个的长度都不一样，扫过去
+   像一堆碎纸片。 */
 .aircraft-label {
   position: absolute;
   left: 50%;
   top: 100%;
   transform: translateX(-50%);
   display: none;
+  margin-top: 1px;
   padding: 0 3px;
   border-radius: 3px;
   white-space: nowrap;
-  background: rgba(255, 255, 255, 0.82);
-  color: #0f172a;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  background: color-mix(in srgb, var(--vr-bg) 82%, transparent);
+  color: var(--vr-t1);
+  font-family: var(--vr-font-mono);
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1.4;
+  letter-spacing: 0.01em;
   pointer-events: none;
-}
-
-.dark .aircraft-label {
-  background: rgba(15, 23, 42, 0.82);
-  color: #e2e8f0;
 }
 
 .show-aircraft-labels .aircraft-label {
   display: block;
 }
 
-/* Position tags. The icon element itself is zero-sized and anchored on the
-   coordinate: the pin marks the field, and the label floats above it rather
-   than sitting on top of the thing it names. */
+/* 席位标签。图标元素本身是零尺寸、锚在坐标上：小圆点标的是机场，标签浮在它上
+   方，而不是盖住它命名的那个东西。 */
 .radar-tag-icon {
   width: 0 !important;
   height: 0 !important;
@@ -2078,20 +2162,14 @@ onBeforeUnmount(() => {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #fff;
-  border: 1.5px solid rgba(15, 23, 42, 0.75);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-}
-
-.dark .radar-tag__pin {
-  background: #0f172a;
-  border-color: rgba(226, 232, 240, 0.85);
+  background: var(--vr-bg);
+  border: 1.5px solid var(--vr-t2);
 }
 
 .radar-tag {
   position: absolute;
-  /* Sits above the pin. Row 0 is nearest it; tags sharing a position stack up
-     from there, so none of them covers the field. */
+  /* 落在小圆点上方。第 0 行离它最近；共用一个位置的标签从那里往上叠，所以谁都不
+     会盖住机场本身。 */
   transform: translate(
     -50%,
     calc(-100% - 9px - var(--radar-tag-row, 0) * 23px)
@@ -2099,37 +2177,33 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 5px;
-  padding: 2px 5px;
-  border-radius: 6px;
+  padding: 2px 4px;
+  /* 4px 而不是 6px —— 这套设计里的圆角一律小一档。 */
+  border-radius: var(--radius-control);
   white-space: nowrap;
-  background: rgba(255, 255, 255, 0.96);
-  border: 1px solid rgba(15, 23, 42, 0.14);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.28);
+  background: color-mix(in srgb, var(--vr-bg) 94%, transparent);
+  border: 1px solid var(--vr-stroke);
+  box-shadow: var(--vr-shadow);
   font-size: 11px;
   line-height: 1.45;
 }
 
-.dark .radar-tag {
-  background: rgba(15, 23, 42, 0.94);
-  border-color: rgba(148, 163, 184, 0.28);
-}
-
+/* 选中的那一个描一圈品牌色。原来描的是中性灰，在一屏彩色的席位方块里根本认不
+   出哪个是「我刚点的那个」。 */
 .radar-tag.is-selected {
-  border-color: rgba(148, 163, 184, 0.95);
+  border-color: var(--vr-brand);
   box-shadow:
-    0 0 0 2px rgba(148, 163, 184, 0.55),
-    0 2px 6px rgba(0, 0, 0, 0.28);
+    0 0 0 1px var(--vr-brand),
+    var(--vr-shadow);
 }
 
 .radar-tag__code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: #0f172a;
-}
-
-.dark .radar-tag__code {
-  color: #f1f5f9;
+  font-family: var(--vr-font-alt);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--vr-t1);
+  cursor: pointer;
 }
 
 .radar-tag__chips {
@@ -2138,21 +2212,24 @@ onBeforeUnmount(() => {
 }
 
 .radar-tag__chip {
-  padding: 0 5px;
-  border-radius: 4px;
+  padding: 0 4px;
+  border-radius: 3px;
+  /* 席位色是饱和的实色，白字在六种颜色上都读得动 —— 这里**不跟主题走**，
+     深浅两套下都是白字。 */
   color: #fff;
+  font-family: var(--vr-font-alt);
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0.04em;
-  /* The chips are the click targets; the label around them is not. */
+  /* 方块才是点击目标，围着它们的标签不是。 */
   cursor: pointer;
 }
 
 .radar-tag__chip.is-selected {
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 0 1.5px var(--vr-bg);
 }
 
-/* Route endpoints: a dot on the field with its ICAO beside it. */
+/* 航路两端：机场上一个点，旁边是它的 ICAO。 */
 .radar-airport {
   position: absolute;
   transform: translate(-50%, -50%);
@@ -2160,69 +2237,65 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 3px;
   padding: 1px 4px 1px 2px;
-  border-radius: 4px;
+  border-radius: 3px;
   white-space: nowrap;
-  background: rgba(255, 255, 255, 0.85);
-  color: #0f172a;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.dark .radar-airport {
-  background: rgba(15, 23, 42, 0.8);
-  color: #f1f5f9;
+  background: color-mix(in srgb, var(--vr-bg) 85%, transparent);
+  color: var(--vr-t1);
+  font-family: var(--vr-font-alt);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
 }
 
 .radar-airport__dot {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--radar-airport-color, #475569);
+  background: var(--radar-airport-color, var(--vr-t3));
 }
 
-/* Waypoints along the route. The dot is the marker; the name is revealed by
-   the zoom filter, and never on a marker small enough to be the dot itself. */
+/* 航路上的航路点。点是标记，名字由缩放过滤器决定露不露，而且永远不会出现在小
+   到只剩一个点的标记上。 */
 .radar-fix {
   position: absolute;
-  /* Half the dot, so the dot itself lands on the fix and the name hangs off
-     it. Centring the whole box would walk the dot off the waypoint the moment
-     the name appeared. */
-  transform: translate(-2.5px, -2.5px);
+  /* 半个标记，这样标记本身落在航路点上、名字挂在它旁边。整个盒子居中的话，名
+     字一出现标记就从航路点上走开了。数值跟着 .radar-fix__dot 的尺寸走。 */
+  transform: translate(-6px, -5.25px);
   display: flex;
   align-items: center;
   gap: 3px;
   white-space: nowrap;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--vr-font-mono);
   font-size: 9px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1;
 }
 
-.radar-fix__dot {
-  width: 5px;
-  height: 5px;
-  flex: none;
-  border: 1px solid var(--radar-fix-color, #475569);
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.9);
-}
+/* 航路点是三角形，不是圆点 —— vatsim-radar 就是这么画的，而且它把「航路上的
+   点」和地图上别的圆形标记（机场、席位的小圆点）从形状上分开了：一屏上同时有
+   三种圆点时，颜色不够用来区分它们。
 
-.dark .radar-fix__dot {
-  background: rgba(15, 23, 42, 0.9);
+   内联 SVG 而不是 CSS 的 border 三角形技巧：要的是描边加半透明填充，border 画
+   出来的三角形是实心的，描不了边。 */
+.radar-fix__dot {
+  width: 12px;
+  height: 10.5px;
+  flex: none;
+  overflow: visible;
+  fill: color-mix(in srgb, var(--vr-bg) 88%, transparent);
+  stroke: var(--radar-fix-color, var(--vr-t3));
+  /* 描边按 viewBox 的单位算，元素放大它也跟着放大 —— 所以放大之后这个数要往
+     回收一点，否则三角形会从「一个描出来的形状」变成「一坨实心的」。 */
+  stroke-width: 1.2;
+  stroke-linejoin: round;
 }
 
 .radar-fix__name {
   display: none;
   padding: 0 3px;
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.8);
-  color: #0f172a;
-}
-
-.dark .radar-fix__name {
-  background: rgba(15, 23, 42, 0.78);
-  color: #e2e8f0;
+  background: color-mix(in srgb, var(--vr-bg) 80%, transparent);
+  color: var(--vr-t2);
 }
 
 .show-fix-labels .radar-fix:not(.radar-fix--terminal) .radar-fix__name,
@@ -2230,8 +2303,7 @@ onBeforeUnmount(() => {
   display: block;
 }
 
-/* The airway or procedure a stretch of the route is flown along, sitting on
-   the line itself. Hidden until the zoom filter says there is room. */
+/* 某一段航路飞的是哪条航路或程序，压在线上。缩放过滤器说放得下之前不显示。 */
 .radar-via {
   position: absolute;
   transform: translate(-50%, -50%);
@@ -2239,20 +2311,30 @@ onBeforeUnmount(() => {
   padding: 0 3px;
   border-radius: 3px;
   white-space: nowrap;
-  background: rgba(255, 255, 255, 0.82);
-  color: var(--radar-via-color, #475569);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  background: color-mix(in srgb, var(--vr-bg) 82%, transparent);
+  color: var(--radar-via-color, var(--vr-t3));
+  font-family: var(--vr-font-alt);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
   line-height: 1.5;
-}
-
-.dark .radar-via {
-  background: rgba(15, 23, 42, 0.78);
 }
 
 .show-via-labels .radar-via {
   display: block;
+}
+
+/* 比例尺。Leaflet 自带的是一条白边黑字的方框，压在近黑的底图上是一块补丁。 */
+.leaflet-control-scale-line {
+  padding: 1px 5px;
+  border: 1px solid var(--vr-stroke) !important;
+  border-top: none !important;
+  border-radius: 0 0 3px 3px;
+  color: var(--vr-t3);
+  font-family: var(--vr-font-alt);
+  font-size: 10px;
+  font-weight: 600;
+  text-shadow: none;
+  background: color-mix(in srgb, var(--vr-bg) 80%, transparent) !important;
 }
 </style>

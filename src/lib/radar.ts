@@ -188,6 +188,41 @@ export function facilityColor(facility: number): string {
 }
 
 /**
+ * 管制区多边形和航路线的颜色。
+ *
+ * **为什么是字面量而不是 vr-theme.css 的记号：** 地图开着 `preferCanvas`，多边
+ * 形和折线是画进 canvas 的，而 canvas 的 `strokeStyle` 不认 CSS 自定义属性 ——
+ * `var(--vr-t3)` 传给 Leaflet 只会得到一条什么都不画的线。所以这几个值在这里各
+ * 留一份，深浅两套。
+ *
+ * 放在 `radar.ts` 而不是地图组件里，是因为**设置里的图例要用同一批值**。图例和
+ * 地图各写一份色号，是那种改了一边、另一边悄悄开始说谎的东西。
+ */
+export const AREA_COLORS = {
+  /**
+   * 有人管的管制区，用 CTR 的席位色。
+   *
+   * 原来是一个和别处都对不上的翡翠绿（#10B981）。改成席位色之后，地图上那块填
+   * 色、机场标签上的 CTR 方块、图例里的那一格是同一个颜色 —— 也就是「谁在管这
+   * 块空域」这件事只需要认一次颜色。
+   */
+  active: FACILITY_COLORS[6],
+  /**
+   * 没人管的管制区。取自 vatsim-radar 的 `mapSectorBorder`：全世界几百个 FIR
+   * 同时画出来是一张网，它的任务是「在那儿但别抢眼」。
+   */
+  idle: { dark: "#3a3a3a", light: "#cbcbcb" },
+} as const;
+
+/**
+ * 航路线。中性灰，两套主题各一个。
+ *
+ * 刻意不用品牌色也不用高度色：飞机是按高度着色的，航路线要是也有颜色，一屏上就
+ * 有两套互相竞争的色彩编码。它是背景信息。
+ */
+export const ROUTE_COLORS = { dark: "#8a8a8a", light: "#5a5a5a" } as const;
+
+/**
  * One-letter labels for the positions that share an airport's tag, the way
  * vatsim-radar labels them: `UKBB D G T A`.
  *

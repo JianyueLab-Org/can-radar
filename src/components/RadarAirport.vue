@@ -2,19 +2,23 @@
 /**
  * 一个机场此刻的样子。
  *
- * 和 RadarDetails 并列的第二块详情面板，共用同一个位置 —— 同一时刻只会开一个，
- * 因为选中键是同一把（`apt:` / `pilot:` / `atc:` 三选一）。
+ * 和 RadarDetails 并列的第二张卡。选中键是同一把（`apt:` / `pilot:` / `atc:`
+ * 三选一），所以同一时刻只会开一张 —— 但它们现在是**堆在同一列里**的浮层，而不
+ * 是共用地图左边那一栏，所以将来要让机场和它的某一架进场航班同时开着，只是把选
+ * 中键改成一个数组的事。
  *
  * 进离场和在场席位全部从已有的 datafeed 推导（见 airportView.ts），只有天气是一
  * 次网络请求。所以这个面板在数据刷新时会跟着更新，而天气不会每 30 秒重取一次。
  */
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 
-import Icon from "@/components/ui/Icon.vue";
 import { airportSnapshot, fetchMetar } from "@/lib/airportView";
 import { getFacilityName } from "@/lib/facilities";
 import { createTranslator } from "@/lib/i18n";
 import { altitudeColor, facilityColor, flightLevel } from "@/lib/radar";
+import VrInfoPopup, {
+  type InfoPopupSection,
+} from "@/components/vr/VrInfoPopup.vue";
 import type { AtisData, Controller, Pilot } from "@/lib/radarTypes";
 
 const props = defineProps<{
@@ -73,154 +77,258 @@ onBeforeUnmount(() => inflight?.abort());
 function isAtisStation(station: Controller | AtisData): boolean {
   return props.atis.some((a) => a.callsign === station.callsign);
 }
+
+/**
+ * 分段。计数挂在标题右边的小气泡上，所以标题本身不用再写「(12)」。
+ *
+ * 进离场两段可折叠：一个繁忙机场两边加起来能有几十行，而开这张卡的人多半先看
+ * 天气和席位。默认都是展开的 —— 折叠是给「这次不想看」用的，不是默认状态。
+ */
+const sections = computed<InfoPopupSection[]>(() => {
+  const snap = snapshot.value;
+  if (!snap) return [];
+  return [
+    { key: "metar", title: t("airport.metar") },
+    {
+      key: "stations",
+      title: t("airport.onStation"),
+      bubble: snap.stations.length || undefined,
+    },
+    {
+      key: "departures",
+      title: t("airport.departures"),
+      bubble: snap.departures.length || undefined,
+      collapsible: true,
+    },
+    {
+      key: "arrivals",
+      title: t("airport.arrivals"),
+      bubble: snap.arrivals.length || undefined,
+      collapsible: true,
+    },
+  ];
+});
 </script>
 
 <template>
-  <aside
+  <VrInfoPopup
     v-if="snapshot"
-    class="border-line bg-surface absolute inset-y-0 left-0 z-20 w-full overflow-y-auto border-r p-4 lg:relative lg:w-80 lg:shrink-0"
-    role="complementary"
-    :aria-label="t('airport.title')"
+    :sections="sections"
+    accent="var(--vr-brand)"
+    @close="emit('close')"
   >
-    <div class="mb-3 flex items-start justify-between gap-2">
-      <div>
-        <div class="text-lg font-semibold">{{ snapshot.icao }}</div>
-        <div class="text-muted text-xs">{{ t("airport.title") }}</div>
-      </div>
-      <button
-        type="button"
-        class="btn btn-ghost p-1"
-        :aria-label="t('airport.close')"
-        @click="emit('close')"
-      >
-        <Icon name="xMark" class="size-4" />
-      </button>
-    </div>
+    <template #title>
+      <span class="ra-icao">{{ snapshot.icao }}</span>
+      <span class="ra-kind">{{ t("airport.title") }}</span>
+    </template>
 
-    <!-- 天气。放在最上面：管制员开这个面板十次有八次是为了看它。 -->
-    <section class="mb-4">
-      <h3 class="text-muted mb-1 text-xs font-medium">
-        {{ t("airport.metar") }}
-      </h3>
-      <p
-        v-if="metarLoading"
-        class="text-muted bg-subtle rounded p-2 font-mono text-xs"
-      >
-        …
-      </p>
-      <p
-        v-else-if="metar"
-        class="bg-subtle rounded p-2 font-mono text-xs break-words"
-      >
-        {{ metar }}
-      </p>
-      <p v-else class="text-muted text-xs">
-        {{ t("airport.metarUnavailable") }}
-      </p>
-    </section>
+    <!-- 天气 -->
+    <template #metar>
+      <p v-if="metarLoading" class="ra-metar ra-metar--dim">…</p>
+      <p v-else-if="metar" class="ra-metar">{{ metar }}</p>
+      <p v-else class="ra-empty">{{ t("airport.metarUnavailable") }}</p>
+    </template>
 
     <!-- 在场席位 -->
-    <section class="mb-4">
-      <h3 class="text-muted mb-1 text-xs font-medium">
-        {{ t("airport.onStation") }}
-      </h3>
-      <ul v-if="snapshot.stations.length" role="list" class="space-y-1">
+    <template #stations>
+      <ul v-if="snapshot.stations.length" class="ra-list" role="list">
         <li v-for="station in snapshot.stations" :key="station.callsign">
           <button
             type="button"
-            class="hover:bg-subtle flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs"
+            class="ra-item"
             @click="emit('select', `atc:${station.callsign}`)"
           >
             <span
-              class="inline-block size-2 shrink-0 rounded-full"
+              class="vr-chip ra-item_chip"
               :style="{ background: facilityColor(station.facility) }"
-            ></span>
-            <span class="font-medium">{{ station.callsign }}</span>
-            <span class="text-muted ml-auto">
+            >
               {{
                 isAtisStation(station)
                   ? "ATIS"
                   : getFacilityName(station.facility)
               }}
             </span>
+            <span class="ra-item_callsign">{{ station.callsign }}</span>
+            <span class="ra-item_trail vr-mono">{{ station.frequency }}</span>
           </button>
         </li>
       </ul>
-      <p v-else class="text-muted text-xs">{{ t("airport.noStations") }}</p>
-    </section>
+      <p v-else class="ra-empty">{{ t("airport.noStations") }}</p>
+    </template>
 
     <!-- 离场 -->
-    <section class="mb-4">
-      <h3 class="text-muted mb-1 text-xs font-medium">
-        {{ t("airport.departures") }}
-        <span v-if="snapshot.departures.length"
-          >({{ snapshot.departures.length }})</span
-        >
-      </h3>
-      <ul v-if="snapshot.departures.length" role="list" class="space-y-1">
+    <template #departures>
+      <ul v-if="snapshot.departures.length" class="ra-list" role="list">
         <li v-for="entry in snapshot.departures" :key="entry.pilot.callsign">
           <button
             type="button"
-            class="hover:bg-subtle flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs"
+            class="ra-item"
             @click="
               emit('select', `pilot:${entry.pilot.cid || entry.pilot.callsign}`)
             "
           >
-            <span class="font-medium">{{ entry.pilot.callsign }}</span>
-            <span class="text-muted truncate">
+            <span
+              class="ra-item_dot"
+              :style="{
+                background: altitudeColor(entry.pilot.altitude, theme),
+              }"
+              aria-hidden="true"
+            />
+            <span class="ra-item_callsign">{{ entry.pilot.callsign }}</span>
+            <span class="ra-item_route vr-mono">
               → {{ entry.pilot.flight_plan?.arrival || "—" }}
             </span>
-            <span
-              class="ml-auto shrink-0 font-mono"
-              :style="{ color: altitudeColor(entry.pilot.altitude, theme) }"
-            >
+            <span class="ra-item_trail vr-mono">
               {{
                 entry.onGround
                   ? t("filters.ground")
-                  : flightLevel(entry.pilot.altitude)
+                  : `FL${flightLevel(entry.pilot.altitude)}`
               }}
             </span>
           </button>
         </li>
       </ul>
-      <p v-else class="text-muted text-xs">{{ t("airport.noDepartures") }}</p>
-    </section>
+      <p v-else class="ra-empty">{{ t("airport.noDepartures") }}</p>
+    </template>
 
     <!-- 进场 -->
-    <section>
-      <h3 class="text-muted mb-1 text-xs font-medium">
-        {{ t("airport.arrivals") }}
-        <span v-if="snapshot.arrivals.length"
-          >({{ snapshot.arrivals.length }})</span
-        >
-      </h3>
-      <ul v-if="snapshot.arrivals.length" role="list" class="space-y-1">
+    <template #arrivals>
+      <ul v-if="snapshot.arrivals.length" class="ra-list" role="list">
         <li v-for="entry in snapshot.arrivals" :key="entry.pilot.callsign">
           <button
             type="button"
-            class="hover:bg-subtle flex w-full items-center gap-2 rounded px-2 py-1 text-left text-xs"
+            class="ra-item"
             @click="
               emit('select', `pilot:${entry.pilot.cid || entry.pilot.callsign}`)
             "
           >
-            <span class="font-medium">{{ entry.pilot.callsign }}</span>
-            <span class="text-muted truncate">
+            <span
+              class="ra-item_dot"
+              :style="{
+                background: altitudeColor(entry.pilot.altitude, theme),
+              }"
+              aria-hidden="true"
+            />
+            <span class="ra-item_callsign">{{ entry.pilot.callsign }}</span>
+            <span class="ra-item_route vr-mono">
               {{ entry.pilot.flight_plan?.departure || "—" }} →
             </span>
-            <span
-              class="ml-auto shrink-0 font-mono"
-              :style="{ color: altitudeColor(entry.pilot.altitude, theme) }"
-            >
+            <span class="ra-item_trail vr-mono">
               {{
                 entry.onGround
                   ? t("filters.ground")
-                  : flightLevel(entry.pilot.altitude)
+                  : `FL${flightLevel(entry.pilot.altitude)}`
               }}
             </span>
           </button>
         </li>
       </ul>
-      <p v-else class="text-muted text-xs">{{ t("airport.noArrivals") }}</p>
-    </section>
-  </aside>
+      <p v-else class="ra-empty">{{ t("airport.noArrivals") }}</p>
+    </template>
+  </VrInfoPopup>
 </template>
+
+<style scoped>
+.ra-icao {
+  font-family: var(--vr-font-alt);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.ra-kind {
+  margin-left: 8px;
+  font-family: var(--vr-font-alt);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-faint);
+  text-transform: uppercase;
+}
+
+.ra-metar {
+  padding: 8px;
+  border-radius: var(--radius-control);
+
+  font-family: var(--vr-font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--vr-t2);
+  overflow-wrap: anywhere;
+
+  background: var(--vr-alpha-4);
+}
+.ra-metar--dim {
+  color: var(--color-faint);
+}
+
+.ra-empty {
+  font-size: 12px;
+  color: var(--color-faint);
+}
+
+.ra-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.ra-item {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+
+  width: 100%;
+  padding: 5px 6px;
+  border: none;
+  border-radius: 3px;
+
+  font-family: inherit;
+  font-size: 12px;
+  color: var(--vr-t2);
+  text-align: left;
+
+  background: transparent;
+  cursor: pointer;
+
+  transition: background-color 0.2s ease;
+}
+.ra-item:hover {
+  background: var(--vr-alpha-8);
+}
+
+.ra-item_chip {
+  flex: none;
+  min-width: 38px;
+}
+
+.ra-item_dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.ra-item_callsign {
+  flex: none;
+  font-family: var(--vr-font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--vr-t1);
+}
+
+.ra-item_route {
+  overflow: hidden;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--color-faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ra-item_trail {
+  margin-left: auto;
+  flex: none;
+  font-size: 11px;
+  color: var(--color-faint);
+}
+</style>
