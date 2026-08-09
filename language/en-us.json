@@ -15,6 +15,7 @@
   },
   "radar": {
     "title": "Radar",
+    "trafficTitle": "Live traffic",
     "controllers": "ATC",
     "pilots": "Pilots",
     "legend": {
@@ -24,6 +25,7 @@
       "altitude": "Altitude"
     },
     "refresh": "Refresh data",
+    "fitAll": "Fit all traffic",
     "lastUpdate": "Updated",
     "never": "Never",
     "loading": "Loading radar data…",

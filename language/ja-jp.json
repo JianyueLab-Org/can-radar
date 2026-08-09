@@ -15,6 +15,7 @@
   },
   "radar": {
     "title": "レーダー",
+    "trafficTitle": "オンライン交通",
     "controllers": "管制員",
     "pilots": "パイロット",
     "legend": {
@@ -24,6 +25,7 @@
       "altitude": "高度"
     },
     "refresh": "データを更新",
+    "fitAll": "全トラフィックを表示",
     "lastUpdate": "更新",
     "never": "未取得",
     "loading": "レーダーデータを読み込み中…",

@@ -1,19 +1,29 @@
 <script setup lang="ts">
+/**
+ * 雷达页的外壳。
+ *
+ * 版式照 vatsim-radar：**地图占满整块内容区**，其余一切浮在它上面 —— 左上是状态
+ * 条，左下是一列控件，右边是一摞卡片。原来的版式是三栏（详情 | 地图 | 列表），
+ * 两侧一开，地图就只剩中间一条；在一台 1366 的笔记本上那条比手机还窄。
+ *
+ * 浮层的代价是它会挡住底下的地图，所以有三件事是配套的：卡片列是
+ * `pointer-events: none`、只有卡片本身接事件，中间那块地图始终可拖；卡片可以逐张
+ * 折叠成一条标题；列本身可以整个收起来。
+ *
+ * 状态（选中了谁、筛选、设置、视口）仍然全部在这里，卡片只是显示 —— 这一点没
+ * 变，改的只是它们被摆在哪儿。
+ */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import RadarMap from "@/components/RadarMap.vue";
 import RadarDetails from "@/components/RadarDetails.vue";
 import RadarAirport from "@/components/RadarAirport.vue";
-import { getFacilityName } from "@/lib/facilities";
-import {
-  altitudeColor,
-  altitudeLegend,
-  facilityColor,
-  flightLevel,
-} from "@/lib/radar";
-import { createTranslator } from "@/lib/i18n";
-import BaseBadge from "@/components/ui/BaseBadge.vue";
+import RadarTraffic from "@/components/RadarTraffic.vue";
+import VrButton from "@/components/vr/VrButton.vue";
+import VrBubble from "@/components/vr/VrBubble.vue";
 import Icon from "@/components/ui/Icon.vue";
-import Skeleton from "@/components/ui/Skeleton.vue";
+import { getFacilityName } from "@/lib/facilities";
+import { altitudeLegend, facilityColor } from "@/lib/radar";
+import { createTranslator } from "@/lib/i18n";
 import { DATAFEED_URL, type ApiData } from "@/lib/radarTypes";
 import {
   DEFAULT_SETTINGS,
@@ -26,7 +36,6 @@ import {
 import {
   EMPTY_FILTER,
   activeAirports,
-  isFiltering,
   matchesFilter,
   type TrafficFilter,
 } from "@/lib/radarFilter";
@@ -40,11 +49,12 @@ const error = ref<string | null>(null);
 const lastUpdate = ref<Date | null>(null);
 const theme = ref<"dark" | "light">("light");
 
-// The traffic list is a right rail on desktop and an overlay drawer below it,
-// so the map is never squeezed into a sliver on a phone.
-const panelOpen = ref(true);
+/** 右边那一摞卡片开着还是收着。手机上默认收着 —— 一进来先看地图。 */
+const railOpen = ref(true);
+/** 交通那张卡自己的折叠状态，和整列的开关是两件事。 */
+const trafficCollapsed = ref(false);
 const activeTab = ref<"controllers" | "pilots">("controllers");
-/* 筛选是一个对象而不是一个字符串了：文字框只是它的一项，另外三项（高度层、起降
+/* 筛选是一个对象而不是一个字符串：文字框只是它的一项，另外三项（高度层、起降
  * 机场）是下拉。**四项一起作用到列表和地图**，见 mapPilots。 */
 const filter = ref<TrafficFilter>({ ...EMPTY_FILTER });
 
@@ -84,25 +94,19 @@ function syncTheme() {
 }
 
 /**
- * Escape closes whatever is stacked on top of the map.
+ * Escape 依次收掉压在地图上的东西。
  *
- * These two surfaces are the only overlays in the app not driven by
- * `useOverlay`, and deliberately so: below `lg` they float over the map behind
- * a backdrop, but from `lg` up they are static columns of the page, where a
- * body scroll lock and a focus trap would be wrong. Escape-to-close is the
- * part that is right at every width, so it is wired by hand here.
- *
- * The details panel is dismissed first — it is the one drawn over the drawer —
- * so a single press never closes both at once.
+ * 顺序是「后开的先关」：设置浮层 → 选中的卡片 → 整列。一次按键只关一层，否则在
+ * 手机上按一下就回到了空地图，而人多半只是想关掉刚点开的那个下拉。
  */
 function onGlobalKeydown(event: KeyboardEvent) {
   if (event.key !== "Escape") return;
-  if (selected.value) {
+  if (settingsOpen.value) {
+    settingsOpen.value = false;
+  } else if (selected.value) {
     selected.value = null;
-  } else if (panelOpen.value && window.innerWidth < 1024) {
-    // Above `lg` the drawer is page furniture, not an overlay; closing it on
-    // Escape there would fight the user rather than help them.
-    panelOpen.value = false;
+  } else if (railOpen.value && window.innerWidth < 1024) {
+    railOpen.value = false;
   }
 }
 
@@ -121,8 +125,8 @@ onMounted(() => {
     attributeFilter: ["class"],
   });
 
-  // Start collapsed on small screens where the map needs the whole width.
-  panelOpen.value = window.innerWidth >= 1024;
+  // 手机上一进来先看地图；带着 ?sel= 进来的除外 —— 那种链接的全部意义就是那张卡。
+  railOpen.value = window.innerWidth >= 1024 || !!initialView.value.selected;
 
   document.addEventListener("keydown", onGlobalKeydown);
   fetchData();
@@ -134,12 +138,6 @@ onBeforeUnmount(() => {
   if (observer) observer.disconnect();
   document.removeEventListener("keydown", onGlobalKeydown);
 });
-
-function matches(value: string | undefined): boolean {
-  const needle = filter.value.text.trim().toLowerCase();
-  if (!needle) return true;
-  return (value ?? "").toLowerCase().includes(needle);
-}
 
 /**
  * Observers are dropped from the feed here, once, so nothing downstream has to
@@ -155,14 +153,18 @@ const controllers = computed(
     [],
 );
 
+function matchesText(value: string | undefined): boolean {
+  const needle = filter.value.text.trim().toLowerCase();
+  if (!needle) return true;
+  return (value ?? "").toLowerCase().includes(needle);
+}
+
 const filteredControllers = computed(() =>
-  controllers.value.filter((c) => matches(c.callsign)),
+  controllers.value.filter((c) => matchesText(c.callsign)),
 );
 const filteredPilots = computed(
   () => data.value?.pilots.filter((p) => matchesFilter(p, filter.value)) ?? [],
 );
-
-const filtering = computed(() => isFiltering(filter.value));
 
 /** 下拉里只列**当前真的有交通**的机场，按架次排。 */
 const departureOptions = computed(() =>
@@ -172,16 +174,12 @@ const arrivalOptions = computed(() =>
   activeAirports(data.value?.pilots ?? [], "arrival"),
 );
 
-function clearFilter() {
-  filter.value = { ...EMPTY_FILTER };
-}
-
 /**
  * 地图上画哪些飞机。
  *
  * 就是筛出来的那批 —— 地图的增量同步会自己把不在列表里的标记撤掉，所以筛选天然
- * 同步到地图，不需要第二套逻辑。**唯一的例外是选中的那架**：把它筛掉之后详情面
- * 板还开着、地图上却没有它，那是一个自相矛盾的画面。
+ * 同步到地图，不需要第二套逻辑。**唯一的例外是选中的那架**：把它筛掉之后详情卡
+ * 还开着、地图上却没有它，那是一个自相矛盾的画面。
  */
 const mapPilots = computed(() => {
   const visible = filteredPilots.value;
@@ -193,44 +191,33 @@ const mapPilots = computed(() => {
     : [...visible, chosen];
 });
 
-const legend = computed(() => [
-  // A hollow swatch, because that is exactly how coverage draws on the map.
-  { label: t("legend.range"), class: "border border-airwaysn", ring: true },
-  { label: t("legend.activeAreas"), class: "bg-success/70", ring: false },
-  {
-    label: t("legend.inactiveAreas"),
-    class: "bg-[var(--color-faint)]/50",
-    ring: false,
-  },
-]);
-
-// Position tags are colour-coded by facility, so the legend spells the code
-// out rather than describing it. Same order as the chips inside a tag.
+/* 图例。原来它横在状态条里，只在 xl 以上才显示 —— 也就是最需要它的那批小屏幕
+ * 看不到。挪进设置浮层：那是一个人主动打开去理解这张图的地方，而不是一条永远
+ * 占着一行的装饰。 */
 const facilityLegend = [2, 3, 4, 5, 7, 6].map((facility) => ({
   label: getFacilityName(facility),
   color: facilityColor(facility),
 }));
-
-// Aircraft are coloured by altitude, so the legend has to say what the ramp
-// means — otherwise the colour is decoration rather than information.
 const altitudeScale = computed(() => altitudeLegend(theme.value));
 
 /* Selection is shared between the list and the map: clicking either one
- * highlights the other, and the map opens that aircraft's popup. */
+ * highlights the other, and the map centres on it. */
 const mapRef = ref<InstanceType<typeof RadarMap> | null>(null);
+const railRef = ref<HTMLElement | null>(null);
 const selected = ref<string | null>(null);
 
-function select(key: string) {
+function select(key: string | null) {
   selected.value = selected.value === key ? null : key;
-  if (selected.value) {
-    mapRef.value?.focus(selected.value);
-    // On a phone the list covers the map, and the details panel is about to
-    // take the other side of it.
-    if (window.innerWidth < 1024) panelOpen.value = false;
-  }
+  if (!selected.value) return;
+
+  mapRef.value?.focus(selected.value);
+  // 从列表里点开一张卡时，把这一列滚回顶部 —— 新开的卡在最上面，而人的手指可能
+  // 停在列表中段。
+  railOpen.value = true;
+  requestAnimationFrame(() => railRef.value?.scrollTo({ top: 0 }));
 }
 
-/* The details panel renders whatever is selected. Resolving it from the live
+/* The details card renders whatever is selected. Resolving it from the live
  * data (rather than snapshotting on click) means the figures keep updating
  * while the aircraft is on screen. */
 const selectedPilot = computed(() => {
@@ -294,198 +281,212 @@ function onMapMove(next: { lat: number; lon: number; zoom: number }) {
 
 watch(selected, syncUrl);
 watch(settings, (next) => saveSettings(next), { deep: true });
+
+/* ------------------------------------------------------------------ *
+ * 地图控件
+ * ------------------------------------------------------------------ */
+
+const zoom = computed(() => mapRef.value?.zoom ?? 0);
+const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
 </script>
 
 <template>
-  <div class="flex min-h-0 flex-1 flex-col">
-    <!-- Status bar -->
-    <div
-      class="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-subtle bg-surface-raised px-4 py-2"
-    >
-      <div class="flex items-center gap-2">
-        <Icon name="signal" class="size-4 text-airwaysn" />
-        <h1 class="text-sm font-semibold text-ink">{{ t("title") }}</h1>
+  <div class="radar">
+    <!-- 地图。整块内容区都是它。 -->
+    <div class="radar_map">
+      <RadarMap
+        v-if="data"
+        ref="mapRef"
+        :controllers="controllers"
+        :pilots="mapPilots"
+        :atis="data.atis"
+        :theme="theme"
+        :selected="selected"
+        :settings="settings"
+        :initial-view="initialView"
+        @select="select($event)"
+        @move="onMapMove"
+      />
+      <div v-else class="radar_placeholder">
+        <p>{{ loading ? t("loading") : t("noData") }}</p>
       </div>
+    </div>
 
-      <div class="flex items-center gap-2">
-        <BaseBadge variant="info" size="sm">
-          {{ controllers.length }} {{ t("controllers") }}
-        </BaseBadge>
-        <BaseBadge variant="success" size="sm" dot :pulse="!loading">
-          {{ data?.pilots.length ?? 0 }} {{ t("pilots") }}
-        </BaseBadge>
-      </div>
+    <!-- 左上：在线数和更新时间 -->
+    <div class="radar_status">
+      <span class="radar_status_group">
+        <span
+          class="radar_status_dot"
+          :class="{ 'radar_status_dot--stale': !!error }"
+          aria-hidden="true"
+        />
+        <span class="vr-label radar_status_label">{{ t("controllers") }}</span>
+        <VrBubble type="secondary">{{ controllers.length }}</VrBubble>
+      </span>
 
-      <ul
-        class="hidden items-center gap-4 xl:flex"
-        :aria-label="t('legendTitle')"
+      <span class="radar_status_group">
+        <span class="vr-label radar_status_label">{{ t("pilots") }}</span>
+        <VrBubble>{{ data?.pilots.length ?? 0 }}</VrBubble>
+      </span>
+
+      <span v-if="error" class="radar_status_error">{{ error }}</span>
+      <span v-else class="radar_status_time vr-mono">{{
+        lastUpdateLabel
+      }}</span>
+
+      <VrButton
+        type="secondary"
+        size="S"
+        icon
+        :disabled="loading"
+        :aria-label="t('refresh')"
+        :title="t('refresh')"
+        @click="fetchData"
       >
-        <li class="flex items-center gap-1">
+        <template #icon>
+          <Icon name="arrowPath" :class="{ 'radar-spin': loading }" />
+        </template>
+      </VrButton>
+    </div>
+
+    <!-- 左下：地图控件 -->
+    <div class="radar_controls">
+      <VrButton
+        type="secondary-black"
+        size="S"
+        icon
+        :active="settingsOpen"
+        :aria-label="t('settings.title')"
+        :title="t('settings.title')"
+        @click="settingsOpen = !settingsOpen"
+      >
+        <template #icon><Icon name="cog6Tooth" /></template>
+      </VrButton>
+
+      <VrButton
+        class="radar_controls--desktop"
+        type="secondary-black"
+        size="S"
+        icon
+        :disabled="zoom >= zoomRange[1]"
+        aria-label="+"
+        title="+"
+        @click="mapRef?.zoomIn()"
+      >
+        <template #icon><Icon name="plus" /></template>
+      </VrButton>
+
+      <VrButton
+        class="radar_controls--desktop"
+        type="secondary-black"
+        size="S"
+        icon
+        :disabled="zoom <= zoomRange[0]"
+        aria-label="−"
+        title="−"
+        @click="mapRef?.zoomOut()"
+      >
+        <template #icon><Icon name="minus" /></template>
+      </VrButton>
+
+      <VrButton
+        type="secondary-black"
+        size="S"
+        icon
+        :aria-label="t('fitAll')"
+        :title="t('fitAll')"
+        @click="mapRef?.fitAll()"
+      >
+        <template #icon><Icon name="viewfinderCircle" /></template>
+      </VrButton>
+    </div>
+
+    <!-- 设置。地图控件那一列的上方，和触发它的按钮挨着。 -->
+    <div
+      v-if="settingsOpen"
+      class="radar_settings vr-appear-bottom"
+      role="dialog"
+      :aria-label="t('settings.title')"
+    >
+      <div class="radar_settings_head">
+        <span class="vr-h5">{{ t("settings.title") }}</span>
+        <button
+          type="button"
+          class="vr-popup-action"
+          :aria-label="t('settings.close')"
+          @click="settingsOpen = false"
+        >
+          <Icon name="xMark" />
+        </button>
+      </div>
+
+      <div class="radar_settings_body">
+        <label class="vr-label radar_settings_k">{{
+          t("settings.basemap")
+        }}</label>
+        <select v-model="settings.basemap" class="input radar_settings_select">
+          <option value="auto">{{ t("settings.basemapAuto") }}</option>
+          <option value="dark">{{ t("settings.basemapDark") }}</option>
+          <option value="light">{{ t("settings.basemapLight") }}</option>
+          <option value="satellite">
+            {{ t("settings.basemapSatellite") }}
+          </option>
+        </select>
+
+        <span class="vr-label radar_settings_k">{{
+          t("settings.layers")
+        }}</span>
+        <label class="radar_settings_toggle">
+          <input v-model="settings.boundaries" type="checkbox" />
+          {{ t("settings.boundaries") }}
+        </label>
+        <label class="radar_settings_toggle">
+          <input v-model="settings.airportTags" type="checkbox" />
+          {{ t("settings.airportTags") }}
+        </label>
+        <label class="radar_settings_toggle">
+          <input v-model="settings.rangeRings" type="checkbox" />
+          {{ t("settings.rangeRings") }}
+        </label>
+
+        <label class="vr-label radar_settings_k">{{
+          t("settings.units")
+        }}</label>
+        <select v-model="settings.units" class="input radar_settings_select">
+          <option value="aviation">{{ t("settings.unitsAviation") }}</option>
+          <option value="metric">{{ t("settings.unitsMetric") }}</option>
+        </select>
+
+        <!-- 图例 -->
+        <span class="vr-label radar_settings_k">{{ t("legendTitle") }}</span>
+        <div class="radar_legend">
           <span
             v-for="item in facilityLegend"
             :key="item.label"
-            class="rounded px-1 py-px text-[10px] font-semibold text-white"
+            class="vr-chip"
             :style="{ backgroundColor: item.color }"
           >
             {{ item.label }}
           </span>
-        </li>
-        <li
-          v-for="item in legend"
-          :key="item.label"
-          class="flex items-center gap-1.5 text-xs text-muted"
-        >
-          <span
-            :class="[
-              'shrink-0 rounded-full',
-              item.ring ? 'size-2.5' : 'size-2',
-              item.class,
-            ]"
-            aria-hidden="true"
-          ></span>
-          {{ item.label }}
-        </li>
-        <li class="flex items-center gap-1.5 text-xs text-muted">
-          <span>{{ t("legend.altitude") }}</span>
-          <span class="flex items-center gap-px" aria-hidden="true">
+        </div>
+        <div class="radar_legend_ramp">
+          <span class="radar_legend_ramp_bar" aria-hidden="true">
             <span
               v-for="step in altitudeScale"
               :key="step.label"
-              class="h-2 w-4"
               :style="{ backgroundColor: step.color }"
-              :title="step.label"
-            ></span>
+            />
           </span>
-          <span class="tnum text-faint">
-            {{ altitudeScale[0].label }}–{{
-              altitudeScale[altitudeScale.length - 1].label
-            }}
+          <span class="radar_legend_ramp_ends vr-mono">
+            {{ altitudeScale[0].label }} –
+            {{ altitudeScale[altitudeScale.length - 1].label }}
           </span>
-        </li>
-      </ul>
-
-      <div class="ml-auto flex items-center gap-2">
-        <span v-if="error" class="text-xs font-medium text-danger">
-          {{ error }}
-        </span>
-        <span v-else class="hidden text-xs text-faint sm:inline">
-          {{ t("lastUpdate") }} {{ lastUpdateLabel }}
-        </span>
-
-        <button
-          type="button"
-          class="btn btn-ghost size-8 p-0"
-          :disabled="loading"
-          :aria-label="t('refresh')"
-          :title="t('refresh')"
-          @click="fetchData"
-        >
-          <Icon
-            name="arrowPath"
-            :class="['size-4', loading ? 'animate-spin' : '']"
-          />
-        </button>
-
-        <button
-          type="button"
-          class="btn btn-secondary px-2.5 py-1.5 text-xs"
-          :aria-expanded="settingsOpen"
-          @click="settingsOpen = !settingsOpen"
-        >
-          <Icon name="cog6Tooth" class="size-4" />
-          <span class="hidden sm:inline">{{ t("settings.title") }}</span>
-        </button>
-
-        <button
-          type="button"
-          class="btn btn-secondary px-2.5 py-1.5 text-xs"
-          :aria-expanded="panelOpen"
-          @click="panelOpen = !panelOpen"
-        >
-          <Icon name="bars3" class="size-4" />
-          <span class="hidden sm:inline">
-            {{ panelOpen ? t("hidePanel") : t("showPanel") }}
-          </span>
-        </button>
+        </div>
       </div>
     </div>
 
-    <!-- Settings. A small popover rather than a drawer: it is four toggles and
-         a radio group, and taking the whole side of the screen for that would
-         push the map out of the way to change how the map looks. -->
-    <div
-      v-if="settingsOpen"
-      class="border-line bg-surface absolute top-14 right-3 z-30 w-64 rounded-lg border p-3 shadow-lg"
-      role="dialog"
-      :aria-label="t('settings.title')"
-    >
-      <div class="mb-2 flex items-center justify-between">
-        <span class="text-sm font-medium">{{ t("settings.title") }}</span>
-        <button
-          type="button"
-          class="btn btn-ghost p-1"
-          :aria-label="t('settings.close')"
-          @click="settingsOpen = false"
-        >
-          <Icon name="xMark" class="size-4" />
-        </button>
-      </div>
-
-      <label class="text-muted mb-1 block text-xs">{{
-        t("settings.basemap")
-      }}</label>
-      <select v-model="settings.basemap" class="input mb-3 w-full text-xs">
-        <option value="auto">{{ t("settings.basemapAuto") }}</option>
-        <option value="dark">{{ t("settings.basemapDark") }}</option>
-        <option value="light">{{ t("settings.basemapLight") }}</option>
-        <option value="satellite">{{ t("settings.basemapSatellite") }}</option>
-      </select>
-
-      <span class="text-muted mb-1 block text-xs">{{
-        t("settings.layers")
-      }}</span>
-      <label class="mb-1 flex items-center gap-2 text-xs">
-        <input v-model="settings.boundaries" type="checkbox" />
-        {{ t("settings.boundaries") }}
-      </label>
-      <label class="mb-1 flex items-center gap-2 text-xs">
-        <input v-model="settings.airportTags" type="checkbox" />
-        {{ t("settings.airportTags") }}
-      </label>
-      <label class="mb-3 flex items-center gap-2 text-xs">
-        <input v-model="settings.rangeRings" type="checkbox" />
-        {{ t("settings.rangeRings") }}
-      </label>
-
-      <label class="text-muted mb-1 block text-xs">{{
-        t("settings.units")
-      }}</label>
-      <select v-model="settings.units" class="input w-full text-xs">
-        <option value="aviation">{{ t("settings.unitsAviation") }}</option>
-        <option value="metric">{{ t("settings.unitsMetric") }}</option>
-      </select>
-    </div>
-
-    <!-- Details + map + traffic list -->
-    <div class="relative flex min-h-0 flex-1">
-      <!-- Backdrop for the details panel, which overlays the map on a phone -->
-      <div
-        v-if="selectedPilot || selectedStation || selectedAirport"
-        class="animate-overlay-in absolute inset-0 z-10 bg-gray-900/40 backdrop-blur-sm lg:hidden"
-        @click="selected = null"
-      ></div>
-
-      <RadarAirport
-        :messages="messages"
-        :icao="selectedAirport"
-        :pilots="data?.pilots ?? []"
-        :controllers="controllers"
-        :atis="data?.atis ?? []"
-        :theme="theme"
-        @close="selected = null"
-        @select="selected = $event"
-      />
-
+    <!-- 右侧那一摞卡片 -->
+    <div v-if="railOpen" ref="railRef" class="radar_rail">
       <RadarDetails
         :messages="messages"
         :pilot="selectedPilot"
@@ -496,251 +497,350 @@ watch(settings, (next) => saveSettings(next), { deep: true });
         @locate="selected && mapRef?.focus(selected)"
       />
 
-      <div class="relative min-w-0 flex-1">
-        <RadarMap
-          v-if="data"
-          ref="mapRef"
-          :controllers="controllers"
-          :pilots="mapPilots"
-          :atis="data.atis"
-          :theme="theme"
-          :selected="selected"
-          :settings="settings"
-          :initial-view="initialView"
-          @select="selected = $event"
-          @move="onMapMove"
-        />
-        <div
-          v-else
-          class="flex h-full items-center justify-center bg-surface-sunken"
-        >
-          <Skeleton
-            v-if="loading"
-            variant="text"
-            :count="4"
-            :label="t('loading')"
-          />
-          <p v-else class="text-sm text-muted">{{ t("noData") }}</p>
-        </div>
-      </div>
+      <RadarAirport
+        :messages="messages"
+        :icao="selectedAirport"
+        :pilots="data?.pilots ?? []"
+        :controllers="controllers"
+        :atis="data?.atis ?? []"
+        :theme="theme"
+        @close="selected = null"
+        @select="select($event)"
+      />
 
-      <!-- Backdrop for the drawer form -->
-      <div
-        v-if="panelOpen"
-        class="animate-overlay-in absolute inset-0 z-10 bg-gray-900/40 backdrop-blur-sm lg:hidden"
-        @click="panelOpen = false"
-      ></div>
-
-      <aside
-        v-if="panelOpen"
-        class="animate-drawer-panel absolute inset-y-0 right-0 z-20 flex w-80 max-w-[85vw] flex-col border-l border-subtle bg-surface-raised shadow-popover lg:static lg:z-0 lg:max-w-none lg:shadow-none"
-      >
-        <!-- Tabs -->
-        <div class="flex shrink-0 border-b border-subtle">
-          <button
-            v-for="tab in ['controllers', 'pilots'] as const"
-            :key="tab"
-            type="button"
-            :class="[
-              'flex-1 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors',
-              activeTab === tab
-                ? 'border-airwaysn text-airwaysn'
-                : 'border-transparent text-muted hover:text-ink',
-            ]"
-            @click="activeTab = tab"
-          >
-            {{ t(tab) }}
-            <span class="ml-1 text-xs text-faint">
-              {{
-                tab === "controllers"
-                  ? filteredControllers.length
-                  : filteredPilots.length
-              }}
-            </span>
-          </button>
-        </div>
-
-        <div class="shrink-0 border-b border-subtle p-3">
-          <div class="relative">
-            <Icon
-              name="magnifyingGlass"
-              class="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-faint"
-            />
-            <input
-              v-model="filter.text"
-              type="search"
-              :placeholder="t('searchPlaceholder')"
-              :aria-label="t('searchPlaceholder')"
-              class="input pl-9 text-sm"
-            />
-          </div>
-
-          <!-- 三个下拉只在「飞机」页显示：高度和起降机场对席位没有意义，而一组
-               永远灰着的控件比没有这组控件更让人费解。 -->
-          <div
-            v-if="activeTab === 'pilots'"
-            class="mt-2 grid grid-cols-3 gap-1.5"
-          >
-            <select
-              v-model="filter.altitude"
-              class="input text-xs"
-              :aria-label="t('filters.altitude')"
-            >
-              <option value="any">{{ t("filters.altitude") }}</option>
-              <option value="ground">{{ t("filters.ground") }}</option>
-              <option value="low">{{ t("filters.low") }}</option>
-              <option value="mid">{{ t("filters.mid") }}</option>
-              <option value="high">{{ t("filters.high") }}</option>
-            </select>
-
-            <select
-              v-model="filter.departure"
-              class="input text-xs"
-              :aria-label="t('filters.departure')"
-            >
-              <option value="">{{ t("filters.departure") }}</option>
-              <option
-                v-for="a in departureOptions"
-                :key="a.icao"
-                :value="a.icao"
-              >
-                {{ a.icao }} ({{ a.count }})
-              </option>
-            </select>
-
-            <select
-              v-model="filter.arrival"
-              class="input text-xs"
-              :aria-label="t('filters.arrival')"
-            >
-              <option value="">{{ t("filters.arrival") }}</option>
-              <option v-for="a in arrivalOptions" :key="a.icao" :value="a.icao">
-                {{ a.icao }} ({{ a.count }})
-              </option>
-            </select>
-          </div>
-
-          <!-- 说清楚地图也跟着筛了。不说的话，看到地图上只剩三架的人第一反应是
-               网络掉线了，而不是自己刚才选了个筛选条件。 -->
-          <div
-            v-if="filtering"
-            class="mt-2 flex items-center justify-between text-xs"
-          >
-            <span class="text-muted">{{ t("filters.active") }}</span>
-            <button
-              type="button"
-              class="btn btn-ghost px-2 py-0.5"
-              @click="clearFilter"
-            >
-              {{ t("filters.clear") }}
-            </button>
-          </div>
-        </div>
-
-        <!-- Controllers -->
-        <div
-          v-if="activeTab === 'controllers'"
-          class="min-h-0 flex-1 overflow-y-auto p-2"
-        >
-          <ul v-if="filteredControllers.length" role="list" class="space-y-1">
-            <li
-              v-for="(controller, index) in filteredControllers"
-              :key="`${controller.callsign}-${index}`"
-            >
-              <button
-                type="button"
-                :class="[
-                  'w-full rounded-control p-2.5 text-left transition-colors',
-                  selected === `atc:${controller.callsign}`
-                    ? 'bg-surface-sunken ring-1 ring-airwaysn'
-                    : 'hover:bg-surface-sunken',
-                ]"
-                :aria-pressed="selected === `atc:${controller.callsign}`"
-                @click="select(`atc:${controller.callsign}`)"
-              >
-                <span class="flex items-center justify-between gap-2">
-                  <span
-                    class="truncate font-mono text-sm font-semibold text-airwaysn"
-                  >
-                    {{ controller.callsign }}
-                  </span>
-                  <span
-                    class="shrink-0 rounded bg-info-bg px-1.5 py-0.5 font-mono text-xs text-info-fg"
-                  >
-                    {{ controller.frequency }}
-                  </span>
-                </span>
-                <span class="mt-0.5 block truncate text-xs text-muted">
-                  {{ getFacilityName(controller.facility) }}
-                </span>
-                <span class="block truncate text-xs text-faint">{{
-                  controller.name
-                }}</span>
-              </button>
-            </li>
-          </ul>
-          <p v-else class="px-3 py-8 text-center text-sm text-muted">
-            {{ filtering ? t("noMatches") : t("noControllers") }}
-          </p>
-        </div>
-
-        <!-- Pilots -->
-        <div v-else class="min-h-0 flex-1 overflow-y-auto p-2">
-          <ul v-if="filteredPilots.length" role="list" class="space-y-1">
-            <li
-              v-for="(pilot, index) in filteredPilots"
-              :key="`${pilot.callsign}-${index}`"
-            >
-              <button
-                type="button"
-                :class="[
-                  'w-full rounded-control p-2.5 text-left transition-colors',
-                  selected === `pilot:${pilot.cid || pilot.callsign}`
-                    ? 'bg-surface-sunken ring-1 ring-success'
-                    : 'hover:bg-surface-sunken',
-                ]"
-                :aria-pressed="
-                  selected === `pilot:${pilot.cid || pilot.callsign}`
-                "
-                @click="select(`pilot:${pilot.cid || pilot.callsign}`)"
-              >
-                <span class="flex items-center justify-between gap-2">
-                  <span class="flex min-w-0 items-center gap-1.5">
-                    <span
-                      class="size-2 shrink-0 rounded-full"
-                      :style="{
-                        backgroundColor: altitudeColor(pilot.altitude, theme),
-                      }"
-                      aria-hidden="true"
-                    ></span>
-                    <span
-                      class="truncate font-mono text-sm font-semibold text-ink"
-                    >
-                      {{ pilot.callsign }}
-                    </span>
-                  </span>
-                  <span class="tnum shrink-0 text-xs text-faint">
-                    FL{{ flightLevel(pilot.altitude) }}
-                  </span>
-                </span>
-                <span
-                  class="mt-0.5 block truncate font-mono text-xs text-muted"
-                >
-                  {{ pilot.flight_plan?.departure || "----" }}
-                  &rarr;
-                  {{ pilot.flight_plan?.arrival || "----" }}
-                </span>
-                <span class="tnum block truncate text-xs text-faint">
-                  {{ pilot.groundspeed }} kts
-                </span>
-              </button>
-            </li>
-          </ul>
-          <p v-else class="px-3 py-8 text-center text-sm text-muted">
-            {{ filtering ? t("noMatches") : t("noPilots") }}
-          </p>
-        </div>
-      </aside>
+      <RadarTraffic
+        v-model:filter="filter"
+        v-model:tab="activeTab"
+        v-model:collapsed="trafficCollapsed"
+        :messages="messages"
+        :controllers="filteredControllers"
+        :pilots="filteredPilots"
+        :departure-options="departureOptions"
+        :arrival-options="arrivalOptions"
+        :selected="selected"
+        :theme="theme"
+        @select="select($event)"
+      />
     </div>
+
+    <!-- 整列的开关。收起来之后它是屏幕上唯一还指向那一列的东西，所以它不能跟着
+         一起消失 —— 位置固定在右上角，开合只换图标。 -->
+    <VrButton
+      class="radar_rail-toggle"
+      type="secondary-black"
+      size="S"
+      icon
+      :aria-expanded="railOpen"
+      :aria-label="railOpen ? t('hidePanel') : t('showPanel')"
+      :title="railOpen ? t('hidePanel') : t('showPanel')"
+      @click="railOpen = !railOpen"
+    >
+      <template #icon>
+        <Icon :name="railOpen ? 'xMark' : 'bars3'" />
+      </template>
+    </VrButton>
   </div>
 </template>
+
+<style scoped>
+.radar {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--vr-bg);
+}
+
+.radar_map {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.radar_placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  height: 100%;
+
+  font-size: 13px;
+  color: var(--color-faint);
+
+  background: var(--vr-l1);
+}
+
+/* ——— 左上：状态条 ——— */
+
+.radar_status {
+  position: absolute;
+  z-index: 5;
+  top: 12px;
+  left: 12px;
+
+  display: flex;
+  gap: 10px;
+  align-items: center;
+
+  max-width: calc(100% - 24px);
+  padding: 4px 6px 4px 10px;
+  border: 1px solid var(--vr-stroke);
+  border-radius: var(--radius-card);
+
+  background: color-mix(in srgb, var(--vr-bg) 92%, transparent);
+  backdrop-filter: blur(8px);
+  box-shadow: var(--vr-shadow);
+}
+
+.radar_status_group {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.radar_status_label {
+  color: var(--color-faint);
+}
+
+/* 一个还在跳的心跳点。取数失败时停下来并转红 —— 「更新于 12:04」本身不会告诉
+   人这个时间已经十分钟没动过了。 */
+.radar_status_dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--vr-success);
+  animation: radar-pulse 2s ease-in-out infinite;
+}
+.radar_status_dot--stale {
+  background: var(--vr-danger);
+  animation: none;
+}
+
+@keyframes radar-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.radar_status_time {
+  font-size: 11px;
+  color: var(--color-faint);
+}
+
+.radar_status_error {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--vr-danger);
+}
+
+.radar-spin {
+  animation: radar-rotate 1s linear infinite;
+}
+@keyframes radar-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ——— 左下：控件 ——— */
+
+.radar_controls {
+  position: absolute;
+  z-index: 5;
+  bottom: 28px;
+  left: 12px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ——— 设置 ——— */
+
+.radar_settings {
+  position: absolute;
+  z-index: 6;
+  bottom: 28px;
+  left: 56px;
+
+  width: 260px;
+  max-width: calc(100vw - 80px);
+  max-height: calc(100dvh - 160px);
+  overflow-y: auto;
+  border: 1px solid var(--vr-stroke);
+  border-radius: var(--radius-card);
+
+  background: var(--vr-bg);
+  box-shadow: var(--vr-shadow);
+}
+
+.radar_settings_head {
+  position: sticky;
+  top: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--vr-stroke);
+
+  background: var(--vr-bg);
+}
+
+.radar_settings_body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px 12px;
+}
+
+.radar_settings_k {
+  margin-top: 6px;
+  color: var(--color-faint);
+}
+.radar_settings_k:first-child {
+  margin-top: 0;
+}
+
+.radar_settings_select {
+  min-height: 32px;
+  font-size: 12px;
+}
+
+.radar_settings_toggle {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+
+  font-size: 12px;
+  color: var(--vr-t2);
+
+  cursor: pointer;
+}
+.radar_settings_toggle input {
+  accent-color: var(--vr-brand);
+}
+
+.radar_legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.radar_legend_ramp {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.radar_legend_ramp_bar {
+  display: flex;
+  overflow: hidden;
+  border-radius: 2px;
+}
+.radar_legend_ramp_bar span {
+  width: 18px;
+  height: 8px;
+}
+
+.radar_legend_ramp_ends {
+  font-size: 10px;
+  color: var(--color-faint);
+}
+
+/* ——— 右侧的卡片列 ——— */
+
+.radar_rail {
+  position: absolute;
+  z-index: 5;
+  top: 12px;
+  right: 12px;
+  bottom: 12px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  width: 380px;
+  max-width: calc(100vw - 24px);
+  overflow-y: auto;
+  scrollbar-width: none;
+
+  /* 列本身不接事件，只有卡片接 —— 卡片之间的缝隙和列底部的空白仍然是可以拖动
+     的地图。少了这一条，右边 380px 宽的一条就整个变成了死区。 */
+  pointer-events: none;
+}
+.radar_rail::-webkit-scrollbar {
+  display: none;
+}
+
+/* 给右上角那个开关让出位置。 */
+.radar_rail > :first-child {
+  margin-top: 40px;
+}
+
+.radar_rail-toggle {
+  position: absolute;
+  z-index: 6;
+  top: 12px;
+  right: 12px;
+}
+
+/* ——— 手机 ——— */
+
+@media (max-width: 1023px) {
+  /* 卡片列变成底部的一张抽屉。放在下面而不是仍然贴右边：单手够得着的是屏幕
+     下半部分，而右上角是最够不着的那个角。 */
+  /* 抽屉的下沿要让开版权条那一行。抽屉盖住它的话，署名就只在抽屉关着的时候
+     可见 —— VATSpy 是 CC BY-SA，署名得在展示它的地方一直看得到。 */
+  .radar_rail {
+    top: auto;
+    right: 8px;
+    bottom: 22px;
+    left: 8px;
+
+    width: auto;
+    max-height: 58dvh;
+  }
+
+  .radar_rail > :first-child {
+    margin-top: 0;
+  }
+
+  /* 控件挪到右边中段：左下角被抽屉占了，而右上角是那个开关。 */
+  .radar_controls {
+    top: 64px;
+    bottom: auto;
+    left: auto;
+    right: 12px;
+  }
+
+  /* 缩放按钮在触摸屏上是多余的 —— 双指捏合更快，而那两个按钮正好占掉抽屉上面
+     仅剩的一点地图。 */
+  .radar_controls--desktop {
+    display: none;
+  }
+
+  .radar_settings {
+    top: 64px;
+    right: 56px;
+    bottom: auto;
+    left: auto;
+  }
+
+  .radar_status {
+    gap: 8px;
+    padding: 3px 5px 3px 8px;
+  }
+
+  /* 手机上这行文字会把状态条挤到换行。心跳点和数字已经说明了同样的事。 */
+  .radar_status_time {
+    display: none;
+  }
+}
+</style>

@@ -33,10 +33,49 @@ bun run build && bun run start
 **4. 页眉链接要走 `site()`。** 这里是另一个源，写 `href="/roster"` 会打在
 radar.airwaysn.org 上然后 404。`siteOrigin` 默认指向主站。
 
+## 外观：这个站不再跟 can-web 一套皮
+
+界面照 [VATSIM Radar](https://github.com/VATSIM-Radar/vatsim-radar) 重做过 ——
+近黑的层级面、1px 发丝边框、4px/8px 的小圆角、Libre Franklin + Jura + Roboto
+Mono，以及**浮在整屏地图上的一摞卡片**取代原来的三栏。
+
+**`globals.css` 仍然是 can-web 那份的镜像，一个字都没改。** 换皮的整件事在
+`src/styles/vr-theme.css` 里，它排在 globals.css **后面**加载，把语义记号
+（`--surface*`、`--border-*`、`--color-ink|muted|faint`、两个圆角）和 `.btn`
+/ `.input` / `.badge` 重新指向另一套值。所以没被重写的组件也跟着变了样子。
+两件事别踩：
+
+- 那份文件里**不能有 Tailwind 的 at-rule**。`@theme` 只在 Tailwind 处理的入口
+  里展开，写在那儿不生效，但看上去像能用。
+- 它**不进任何 `@layer`**，这正是它能覆盖的原因 —— 未分层的规则在级联里排在所有
+  分层规则之上，与选择器权重无关。
+
+**品牌色没有跟着换。** vatsim-radar 用 `blue500 #3B6CEC`，这里仍然是 CAN 自己的
+`#4c92c1`：三个站刚统一到网络自己的标识上，为了套一层皮把品牌色也换掉是本末倒
+置。要换只是 `--vr-brand` 那三行。**席位色是照搬的**（DEL/GND/TWR/APP/CTR/ATIS），
+那是约定不是装饰。
+
+**`leaflet.css` 在 `BaseLayout.astro` 里引，不在 RadarMap.vue 里。** 从组件里引
+的话它是岛屿的动态样式表，浏览器插在 `<head>` 末尾，反过来盖住外观层里同权重的
+规则 —— 版权条会留着一串默认的亮蓝链接、比例尺是一块白底。顺序由布局说了算。
+另外 `vr-theme.css` 里针对版权条的几条带 `:root` 前缀，是为了压过 globals.css
+里 `.dark .leaflet-control-attribution` 那一档权重。
+
+**站头也换了，而且它从此不再是 can-web 的镜像**（56px、只有一条底边、选中项在下
+沿画 2px）。另外两个站的那份没有动。
+
+`src/components/vr/` 是这套设计的原件：`VrInfoPopup` 是那张卡（vatsim-radar 的
+`PopupOverlay`），`VrButton` / `VrTabs` / `VrBlockTitle` / `VrBubble` 是它周围
+的零件。新面板套 `VrInfoPopup` 并用 `sections` 声明分段，别自己拼一遍卡片外壳。
+
 ## 别的
 
 - `globals.css` 是从 can-web 整份搬来的，只去掉了 `@tailwindcss/typography`
   （那是给 /docs 长文用的，这里没有长文）。底部的 Leaflet 块是刻意写死的，
-  别动 —— can-web 的 CLAUDE.md 也是这么说的。
+  别动 —— can-web 的 CLAUDE.md 也是这么说的。它现在被 `vr-theme.css` 盖了一层，
+  但**仍然是镜像**：要同步 can-web 的改动，照样整份覆盖过来就行。
+- 地图底部的版权条把 VATSpy 和 SimAware **各署名了两次** —— 一次在
+  `tileLayer` 的 `attribution` 里，一次在后面的 `addAttribution()` 里。重构前
+  它挤在角落没人注意，现在整条横在地图下沿。这是授权文本，没有顺手改掉。
 - 部署见 `deploy/k8s.yaml`。镜像由 CI 推 GHCR，上线是手工 rollout restart：
   jyl-tyo 的 kubectl 走 Omni OIDC，CI 里过不去。

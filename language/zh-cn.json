@@ -15,6 +15,7 @@
   },
   "radar": {
     "title": "在线地图",
+    "trafficTitle": "在线交通",
     "controllers": "管制员",
     "pilots": "飞行员",
     "legend": {
@@ -24,6 +25,7 @@
       "altitude": "高度"
     },
     "refresh": "刷新数据",
+    "fitAll": "回到全部交通",
     "lastUpdate": "更新于",
     "never": "从未",
     "loading": "正在加载雷达数据…",

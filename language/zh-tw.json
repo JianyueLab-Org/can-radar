@@ -15,6 +15,7 @@
   },
   "radar": {
     "title": "線上地圖",
+    "trafficTitle": "線上交通",
     "controllers": "管制員",
     "pilots": "飛行員",
     "legend": {
@@ -24,6 +25,7 @@
       "altitude": "高度"
     },
     "refresh": "重新整理",
+    "fitAll": "回到全部交通",
     "lastUpdate": "更新於",
     "never": "從未",
     "loading": "正在載入雷達資料…",

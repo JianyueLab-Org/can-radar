@@ -1,5 +1,38 @@
 ---
+/**
+ * 字体。三族，都由 @fontsource 自托管 —— **不走 CDN**：这个网络的用户大半在墙
+ * 内，一个连不上的 fonts.gstatic.com 换来的是三秒白屏加一次回退闪烁。
+ *
+ * 只取 latin 子集和实际用到的字重。整包引进来会带上西里尔、希腊、越南语三套子集
+ * 乘以九个字重，而这一页上的拉丁字形只有呼号、机场代码和几十个界面词。汉字和假名
+ * 本来就不在这些字体里，走系统字体 —— 字族链见 vr-theme.css。
+ */
+import "@fontsource/libre-franklin/latin-400.css";
+import "@fontsource/libre-franklin/latin-500.css";
+import "@fontsource/libre-franklin/latin-600.css";
+import "@fontsource/jura/latin-600.css";
+import "@fontsource/roboto-mono/latin-400.css";
+import "@fontsource/roboto-mono/latin-500.css";
+import "@fontsource/roboto-mono/latin-600.css";
+
+/**
+ * Leaflet 自己的样式，**必须排在最前面**。
+ *
+ * 它原来是从 RadarMap.vue 里引的，那样它会作为岛屿的动态样式表插在 <head> 末
+ * 尾，反过来盖住外观层里针对版权条和比例尺的那几条同权重规则。放在这里，覆盖顺
+ * 序就是文件顺序。
+ */
+import "leaflet/dist/leaflet.css";
+
 import "@/styles/globals.css";
+/**
+ * 外观层，照 VATSIM Radar 的设计。
+ *
+ * **必须排在 globals.css 后面。** 它靠「未分层的规则盖过分层的规则」来重定义语义
+ * 记号和 .btn / .input 这些组件类；顺序反过来的话，`:root` 那一段就会被 Tailwind
+ * 的 @theme 产物覆盖回去。文件开头有完整的说明。
+ */
+import "@/styles/vr-theme.css";
 import ThemeScript from "@/components/ThemeScript.astro";
 import ThemeLangControls from "@/components/ui/ThemeLangControls.vue";
 import { getLocale } from "@/lib/i18n";
