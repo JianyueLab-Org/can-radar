@@ -1648,7 +1648,7 @@ function fixDot(point: RoutePoint, color: string): L.Marker {
     icon: L.divIcon({
       className: "radar-tag-icon",
       html: `<div class="radar-fix${terminal ? " radar-fix--terminal" : ""}" style="--radar-fix-color:${color}">
-          <span class="radar-fix__dot"></span
+          <svg class="radar-fix__dot" viewBox="0 0 10 9" aria-hidden="true"><path d="M5 .6 9.5 8.4H.5z"/></svg
           ><span class="radar-fix__name">${escapeHtml(point.ident)}</span>
         </div>`,
       iconSize: [0, 0],
@@ -2233,9 +2233,9 @@ onBeforeUnmount(() => {
    到只剩一个点的标记上。 */
 .radar-fix {
   position: absolute;
-  /* 半个点，这样点本身落在航路点上、名字挂在它旁边。整个盒子居中的话，名字一
-     出现点就从航路点上走开了。 */
-  transform: translate(-2.5px, -2.5px);
+  /* 半个标记，这样标记本身落在航路点上、名字挂在它旁边。整个盒子居中的话，名
+     字一出现标记就从航路点上走开了。数值跟着 .radar-fix__dot 的尺寸走。 */
+  transform: translate(-3.5px, -3px);
   display: flex;
   align-items: center;
   gap: 3px;
@@ -2246,13 +2246,21 @@ onBeforeUnmount(() => {
   line-height: 1;
 }
 
+/* 航路点是三角形，不是圆点 —— vatsim-radar 就是这么画的，而且它把「航路上的
+   点」和地图上别的圆形标记（机场、席位的小圆点）从形状上分开了：一屏上同时有
+   三种圆点时，颜色不够用来区分它们。
+
+   内联 SVG 而不是 CSS 的 border 三角形技巧：要的是描边加半透明填充，border 画
+   出来的三角形是实心的，描不了边。 */
 .radar-fix__dot {
-  width: 5px;
-  height: 5px;
+  width: 7px;
+  height: 6px;
   flex: none;
-  border: 1px solid var(--radar-fix-color, var(--vr-t3));
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--vr-bg) 90%, transparent);
+  overflow: visible;
+  fill: color-mix(in srgb, var(--vr-bg) 88%, transparent);
+  stroke: var(--radar-fix-color, var(--vr-t3));
+  stroke-width: 1.4;
+  stroke-linejoin: round;
 }
 
 .radar-fix__name {
