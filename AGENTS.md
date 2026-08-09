@@ -80,6 +80,36 @@ Mono，以及**浮在整屏地图上的一摞卡片**取代原来的三栏。
 `PopupOverlay`），`VrButton` / `VrTabs` / `VrBlockTitle` / `VrBubble` 是它周围
 的零件。新面板套 `VrInfoPopup` 并用 `sections` 声明分段，别自己拼一遍卡片外壳。
 
+## public/ 里那三个数据文件
+
+`airports.json`（VATSpy，机场坐标）、`boundaries.geojson`（VATSpy，FIR 多边形）、
+`tracon.geojson`（SimAware，进近空域）。两个数据源都在版权条里署了名，都是
+**CC BY-SA 4.0** —— 可以随仓库分发，这也是它们和 `data/navdata/` 的根本区别：
+navdata 是商业 AIRAC 派生物，永远不进这个公开仓库。
+
+**前两个是补回来的。** 从 can-web 拆出来时只带走了 `tracon.geojson`，另外两个
+留在了原地，于是这个站从拆分那天起：航路线画不出来（`loadAirports()` 404 之后
+返回 `{}`，`airportAt()` 永远是 null，那条「直飞目的地」的降级弧线也就没有终
+点）、管制区边界一片空白、详情卡上的「剩余 / 预计到达」两行从来没出现过 ——
+而版权条一直在署名它并没有装的那批数据。Dockerfile 是 `COPY . .`，k8s 只挂
+navdata 的卷，所以没有任何运行时通路能补上它们：文件不在仓库里就是不在。
+
+刷新的办法在 can-web：`data/vatspy/README.md` + `scripts/build-airports.mjs`。
+那边仍然是上游，这边是拷贝。
+
+## 地图上的向量颜色在 `lib/radar.ts`
+
+管制区填色（`AREA_COLORS`）和航路线（`ROUTE_COLORS`）是 JS 字面量，不是
+vr-theme.css 的记号 —— 地图开着 `preferCanvas`，多边形和折线画进 canvas，而
+canvas 的 `strokeStyle` 不认 CSS 自定义属性，`var(--vr-t3)` 传给 Leaflet 只会
+得到一条什么都不画的线。
+
+放在 `lib/radar.ts` 而不是地图组件里，是因为**设置里的图例要用同一批值**。两边
+各写一份色号，是那种改了一边、另一边悄悄开始说谎的东西。
+
+`AREA_COLORS.idle` 跟主题走，所以主题的 watch 里要调 `syncBoundaries()` 重新
+上色。
+
 ## 别的
 
 - `globals.css` 是从 can-web 整份搬来的，只去掉了 `@tailwindcss/typography`

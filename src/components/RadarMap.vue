@@ -30,6 +30,8 @@ import L from "leaflet";
 import { airportAt, loadAirports } from "@/lib/airports";
 import { getFacilityName } from "@/lib/facilities";
 import {
+  AREA_COLORS,
+  ROUTE_COLORS,
   altitudeColor,
   distanceNm,
   escapeHtml,
@@ -957,19 +959,24 @@ async function syncTracons() {
  * Boundaries — built once, restyled per poll
  * ------------------------------------------------------------------ */
 
+/* 两套边界样式。颜色来自 AREA_COLORS（见 lib/radar.ts 里为什么是字面量），而
+ * 「没人管」那一套跟主题走，所以它是函数而不是常量 —— 主题一换，下面那个
+ * watch 会把所有多边形重新上一遍色。 */
 const ACTIVE_STYLE: L.PathOptions = {
-  color: "#10B981",
+  color: AREA_COLORS.active,
   weight: 2,
   opacity: 0.8,
   fillOpacity: 0.1,
-  fillColor: "#10B981",
+  fillColor: AREA_COLORS.active,
 };
-const INACTIVE_STYLE: L.PathOptions = {
-  color: "#6B7280",
-  weight: 1,
-  opacity: 0.22,
-  fillOpacity: 0,
-};
+function inactiveStyle(): L.PathOptions {
+  return {
+    color: AREA_COLORS.idle[props.theme],
+    weight: 1,
+    opacity: 0.55,
+    fillOpacity: 0,
+  };
+}
 
 /**
  * Unstaffed FIRs live in their own layer, off the map below this zoom.
@@ -1030,7 +1037,7 @@ function buildBoundaries(data: GeoJSON.FeatureCollection) {
       String(boundaryId),
       String(feature.properties?.oceanic) === "1",
     );
-    const shape = L.geoJSON(feature, { style: INACTIVE_STYLE });
+    const shape = L.geoJSON(feature, { style: inactiveStyle() });
     const shapes = boundaryShapes.get(key) ?? [];
     shapes.push(shape);
     boundaryShapes.set(key, shapes);
@@ -1129,7 +1136,7 @@ function syncBoundaries() {
     if (isActive === wasActive) continue;
 
     for (const shape of shapes) {
-      shape.setStyle(isActive ? ACTIVE_STYLE : INACTIVE_STYLE);
+      shape.setStyle(isActive ? ACTIVE_STYLE : inactiveStyle());
       // A staffed sector is always drawn; an unstaffed one is subject to the
       // zoom filter, so the two live in different layers.
       (isActive ? quietBoundariesLayer : boundariesLayer)?.removeLayer(shape);
@@ -1488,7 +1495,7 @@ async function drawRoute() {
   if (routeKey !== wanted) loadRoute(wanted, plan);
 
   const position: LatLon = [pilot.latitude, pilot.longitude];
-  const color = props.theme === "dark" ? "#94a3b8" : "#475569";
+  const color = ROUTE_COLORS[props.theme];
   const arrival = airportAt(plan.arrival);
 
   const ahead =
@@ -2023,6 +2030,9 @@ watch(
     rescaleIcons();
     drawTrail();
     drawRoute();
+    // 没人管的那些边界的颜色跟着主题走（AREA_COLORS.idle），所以主题一换要重新
+    // 上色 —— 少了这一句，从深色切到浅色之后那张网还是深色那一版的灰。
+    syncBoundaries();
   },
 );
 

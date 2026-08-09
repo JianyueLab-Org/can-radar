@@ -2,3 +2,13 @@ dist/
 .astro/
 node_modules/
 bun.lock
+
+# 原样端出去的静态数据，不是源码。三个都是单行的大文件：格式化它们会得到六位数
+# 的行数、几倍的体积，而没有任何人会去读那些行。can-web 的 .prettierignore 里是
+# 同样的两条，理由也一样。
+#
+# `.geojson` 现在碰巧不在 Prettier 认识的扩展名里，所以那两条目前是空转的 ——
+# 写上是因为「哪天它认识了」比「哪天有人纳闷 CI 为什么突然红了」便宜。
+public/airports.json
+public/boundaries.geojson
+public/tracon.geojson

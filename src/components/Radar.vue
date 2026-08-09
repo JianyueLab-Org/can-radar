@@ -22,7 +22,7 @@ import VrButton from "@/components/vr/VrButton.vue";
 import VrBubble from "@/components/vr/VrBubble.vue";
 import Icon from "@/components/ui/Icon.vue";
 import { getFacilityName } from "@/lib/facilities";
-import { altitudeLegend, facilityColor } from "@/lib/radar";
+import { AREA_COLORS, altitudeLegend, facilityColor } from "@/lib/radar";
 import { createTranslator } from "@/lib/i18n";
 import { DATAFEED_URL, type ApiData } from "@/lib/radarTypes";
 import {
@@ -199,6 +199,23 @@ const facilityLegend = [2, 3, 4, 5, 7, 6].map((facility) => ({
   color: facilityColor(facility),
 }));
 const altitudeScale = computed(() => altitudeLegend(theme.value));
+
+/* 空域那三格。它们在重构里一度整个丢了 —— 状态条上原来有一行，搬进设置时只带
+ * 上了席位色和高度色阶。少了它们，地图上那片青色的填色和满屏的灰色网格就没有任
+ * 何地方解释过是什么。
+ *
+ * 颜色来自 AREA_COLORS，和地图画出来的是同一批值，不是照着抄的第二份。 */
+const areaLegend = computed(() => [
+  // 覆盖范围环画的是席位自己的颜色，没有单一色号 —— 用进近的那个，因为环几乎
+  // 只出现在没有 TRACON 几何的进近席位上（见 RadarMap 的 rangeStyle）。
+  { label: t("legend.range"), color: facilityColor(5), ring: true },
+  { label: t("legend.activeAreas"), color: AREA_COLORS.active, ring: false },
+  {
+    label: t("legend.inactiveAreas"),
+    color: AREA_COLORS.idle[theme.value],
+    ring: false,
+  },
+]);
 
 /* Selection is shared between the list and the map: clicking either one
  * highlights the other, and the map centres on it. */
@@ -482,6 +499,22 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
             {{ item.label }}
           </span>
         </div>
+        <ul class="radar_legend_keys">
+          <li v-for="item in areaLegend" :key="item.label">
+            <span
+              class="radar_legend_swatch"
+              :class="{ 'radar_legend_swatch--ring': item.ring }"
+              :style="
+                item.ring
+                  ? { borderColor: item.color }
+                  : { backgroundColor: item.color }
+              "
+              aria-hidden="true"
+            />
+            {{ item.label }}
+          </li>
+        </ul>
+
         <div class="radar_legend_ramp">
           <span class="radar_legend_ramp_bar" aria-hidden="true">
             <span
@@ -753,6 +786,32 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
   display: flex;
   flex-wrap: wrap;
   gap: 3px;
+}
+
+.radar_legend_keys {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.radar_legend_keys li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 11px;
+  color: var(--vr-t3);
+}
+
+.radar_legend_swatch {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+/* 空心的那一个 —— 覆盖范围环在地图上就是一个没有填色的圈。 */
+.radar_legend_swatch--ring {
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  background: transparent;
 }
 
 .radar_legend_ramp {
