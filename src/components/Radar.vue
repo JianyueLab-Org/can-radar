@@ -24,7 +24,8 @@ import Icon from "@/components/ui/Icon.vue";
 import { getFacilityName } from "@/lib/facilities";
 import { AREA_COLORS, altitudeLegend, facilityColor } from "@/lib/radar";
 import { createTranslator } from "@/lib/i18n";
-import { DATAFEED_URL, type ApiData } from "@/lib/radarTypes";
+import { myFlightKey, type Member } from "@/lib/member";
+import { DATAFEED_URL, type ApiData, type Pilot } from "@/lib/radarTypes";
 import {
   DEFAULT_SETTINGS,
   loadSettings,
@@ -40,7 +41,17 @@ import {
   type TrafficFilter,
 } from "@/lib/radarFilter";
 
-const props = defineProps<{ messages: Record<string, unknown> }>();
+const props = defineProps<{
+  messages: Record<string, unknown>;
+  /**
+   * 看这张图的人，没登录时是 null。
+   *
+   * 服务端渲染时就读好了（见 `src/server/session.ts`），所以第一帧就是对的。
+   * 这个岛屿只用它的 `username` —— 那是 ASN ID，也正是数据源里每架飞机的
+   * `cid`，「我的飞机」全部依据就是这一个等号。
+   */
+  member: Member | null;
+}>();
 const t = createTranslator(props.messages);
 
 const data = ref<ApiData | null>(null);
@@ -178,17 +189,23 @@ const arrivalOptions = computed(() =>
  * 地图上画哪些飞机。
  *
  * 就是筛出来的那批 —— 地图的增量同步会自己把不在列表里的标记撤掉，所以筛选天然
- * 同步到地图，不需要第二套逻辑。**唯一的例外是选中的那架**：把它筛掉之后详情卡
- * 还开着、地图上却没有它，那是一个自相矛盾的画面。
+ * 同步到地图，不需要第二套逻辑。**例外有两架**：选中的那架，把它筛掉之后详情卡
+ * 还开着、地图上却没有它，那是一个自相矛盾的画面；以及自己那架，一个筛选条件不
+ * 该让人把自己弄丢 —— 尤其是筛选还开着跟随的时候，地图会追着一个画不出来的点。
  */
 const mapPilots = computed(() => {
   const visible = filteredPilots.value;
-  const chosen = selectedPilot.value;
-  if (!chosen) return visible;
-  const key = chosen.cid || chosen.callsign;
-  return visible.some((p) => (p.cid || p.callsign) === key)
-    ? visible
-    : [...visible, chosen];
+  const keyed = new Set(visible.map((p) => p.cid || p.callsign));
+  const extra = [selectedPilot.value, myFlight.value].filter(
+    (pilot): pilot is Pilot => {
+      if (!pilot) return false;
+      const key = pilot.cid || pilot.callsign;
+      if (keyed.has(key)) return false;
+      keyed.add(key);
+      return true;
+    },
+  );
+  return extra.length ? [...visible, ...extra] : visible;
 });
 
 /* 图例。原来它横在状态条里，只在 xl 以上才显示 —— 也就是最需要它的那批小屏幕
@@ -282,6 +299,92 @@ const selectedIsAtis = computed(
     ),
 );
 
+/* ------------------------------------------------------------------ *
+ * 我的飞机
+ *
+ * 这一段是「登录之后多出来的东西」的全部。它没有自己的数据源：数据源里本来就
+ * 有这架飞机，登录只是让这一页知道**哪一架是你的**（`cid === username`，见
+ * lib/member.ts）。所以没登录时下面这些全是 null 和 false，一行请求都不多发。
+ * ------------------------------------------------------------------ */
+
+const signedIn = computed(() => !!props.member);
+
+/** 自己那架飞机的键，没登录或者没连线时是 null。 */
+const myKey = computed(() => myFlightKey(data.value?.pilots, props.member));
+
+const myFlight = computed(() => {
+  const key = myKey.value;
+  if (!key) return null;
+  const id = key.slice("pilot:".length);
+  return data.value?.pilots.find((p) => (p.cid || p.callsign) === id) ?? null;
+});
+
+/**
+ * 这一次打开先别跟随。
+ *
+ * 带着 `?sel=` 进来的链接多半是别人发的，它的全部意义就是「看这架」。这时候
+ * 就算设置里存着「跟随」，也要按住 —— 否则画面会在三十秒后的下一次刷新时被拽
+ * 到我自己的飞机上，把这条链接吃掉，而且是在人已经开始看了之后。
+ *
+ * 是**这一次**而不是把设置改掉：那是这个人的长期选择，不该被一条别人发来的链
+ * 接悄悄清空。他自己按一下按钮就解除。
+ */
+const followSuppressed = ref(false);
+
+/**
+ * 跟随开着吗。
+ *
+ * 值存在设置里（跟着浏览器走），但**没连线时一律当作关**：跟随一架不存在的飞
+ * 机是个没有意义的状态，而按钮亮着却什么都不动，看着像坏了。
+ */
+const following = computed(
+  () => settings.value.followMine && !!myKey.value && !followSuppressed.value,
+);
+
+/**
+ * 点「我的飞机」。
+ *
+ * 一个按钮两件事：选中它（详情卡打开、地图居中、航迹画出来），以及打开跟随。
+ * 再点一次只关跟随，不取消选中 —— 人多半是想停下来看看别处，而不是把刚打开的
+ * 那张卡关掉。
+ */
+function toggleFollowMine() {
+  const key = myKey.value;
+  if (!key) return;
+
+  if (following.value) {
+    settings.value.followMine = false;
+    return;
+  }
+
+  // 他自己按的，那条链接的优先权到此为止。
+  followSuppressed.value = false;
+  settings.value.followMine = true;
+  if (selected.value !== key) select(key);
+  else mapRef.value?.focus(key);
+}
+
+/**
+ * 重新进来时，如果上次是跟着自己飞的，就接着跟。
+ *
+ * 挂载时做不了 —— 那时数据源还没回来，不知道你在不在天上。所以看的是「自己那
+ * 架第一次出现」这一刻：一次起飞，或者一次刷新页面。
+ *
+ * **带着 `?sel=` 进来的链接除外。** 那种链接的全部意义就是「看这架」，而它多
+ * 半是别人发来的；把画面立刻拽到我自己的飞机上，等于把这条链接吃掉。
+ */
+const followHandled = ref(false);
+watch(myKey, (key) => {
+  if (!key || followHandled.value) return;
+  followHandled.value = true;
+  if (!settings.value.followMine) return;
+  if (initialView.value.selected) {
+    followSuppressed.value = true;
+    return;
+  }
+  select(key);
+});
+
 /** 地图当前的中心和缩放，由地图的 moveend 回报。 */
 const viewport = ref<{ lat: number; lon: number; zoom: number } | null>(null);
 
@@ -332,10 +435,13 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
         :atis="data.atis"
         :theme="theme"
         :selected="selected"
+        :mine="myKey"
+        :follow="following"
         :settings="settings"
         :initial-view="initialView"
         @select="select($event)"
         @move="onMapMove"
+        @follow-cancel="settings.followMine = false"
       />
       <div v-else class="radar_placeholder">
         <p>{{ loading ? t("loading") : t("noData") }}</p>
@@ -358,6 +464,32 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
         <span class="vr-label radar_status_label">{{ t("pilots") }}</span>
         <VrBubble>{{ data?.pilots.length ?? 0 }}</VrBubble>
       </span>
+
+      <!-- 我的飞机。
+
+           只有登录着的人看得到 —— 没登录时这里什么都不加，页眉上那个「登录」
+           已经是入口了，在全网最公开的这一页再摆一句劝人登录的话，是把状态条
+           当广告位。
+
+           连着线时它是一个开关：按下去选中自己那架并跟着它；再按一次停下来。
+           没连线时它是一格灰的说明，因为「功能在哪儿」这件事，等人真的连上线
+           那一刻再去找是找不到的。 -->
+      <template v-if="signedIn">
+        <VrButton
+          v-if="myFlight"
+          class="radar_mine"
+          type="secondary"
+          size="S"
+          :active="following"
+          :aria-pressed="following"
+          :title="following ? t('mine.stop') : t('mine.follow')"
+          @click="toggleFollowMine"
+        >
+          <template #icon><Icon name="paperAirplane" /></template>
+          <span class="vr-mono">{{ myFlight.callsign }}</span>
+        </VrButton>
+        <span v-else class="radar_mine_idle">{{ t("mine.offline") }}</span>
+      </template>
 
       <span v-if="error" class="radar_status_error">{{ error }}</span>
       <span v-else class="radar_status_time vr-mono">{{
@@ -574,6 +706,7 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
         :departure-options="departureOptions"
         :arrival-options="arrivalOptions"
         :selected="selected"
+        :mine="myKey"
         :theme="theme"
         @select="select($event)"
       />
@@ -691,6 +824,30 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
   font-size: 11px;
   font-weight: 600;
   color: var(--vr-danger);
+}
+
+/* ——— 我的飞机 ——— */
+
+/* 按下去（跟随开着）时用品牌色，和地图上那架飞机戴着的圈是同一个颜色 —— 两处
+   的关系要一眼看得出来，否则那个圈只是一个没人解释过的记号。 */
+.radar_mine {
+  gap: 6px;
+  padding-right: 10px;
+  padding-left: 8px;
+  font-size: 12px;
+}
+.radar_mine.vr-btn--active {
+  color: #fff;
+  background: var(--vr-brand);
+}
+.radar_mine.vr-btn--active:hover {
+  background: var(--vr-brand-hover);
+}
+
+.radar_mine_idle {
+  font-size: 11px;
+  color: var(--color-faint);
+  white-space: nowrap;
 }
 
 .radar-spin {
@@ -953,6 +1110,12 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
 
   /* 手机上这行文字会把状态条挤到换行。心跳点和数字已经说明了同样的事。 */
   .radar_status_time {
+    display: none;
+  }
+
+  /* 同理。「未连线」是一句解释，让它把状态条挤换行就本末倒置了 —— 真的连上线
+     之后那个带呼号的按钮还是在的，那才是要占住的位置。 */
+  .radar_mine_idle {
     display: none;
   }
 }

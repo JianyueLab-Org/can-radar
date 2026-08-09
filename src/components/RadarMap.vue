@@ -54,6 +54,15 @@ const props = defineProps<{
   theme: "dark" | "light";
   /** `pilot:<cid>` / `atc:<callsign>`, kept in sync with the traffic list. */
   selected?: string | null;
+  /**
+   * 看这张图的人自己那架飞机的键，没登录或者没连线时是 null。
+   *
+   * 和 `selected` 是两件事：选中的那架随时会换，这一架在整个航段里都是同一架，
+   * 所以它在图上一直戴着自己的记号 —— 一屏两百架飞机时，「哪个是我」不该靠找。
+   */
+  mine?: string | null;
+  /** 跟随自己那架：每次刷新把地图挪过去。缩放不动，那是人自己调的。 */
+  follow?: boolean;
   /** The viewer's own preferences — basemap and which layers are drawn. */
   settings: RadarSettings;
   /** Centre and zoom to open at, from a shared link. Read once, on setup. */
@@ -64,6 +73,14 @@ const emit = defineEmits<{
   (e: "select", key: string | null): void;
   /** Reported so the parent can put the viewport in the URL. */
   (e: "move", view: { lat: number; lon: number; zoom: number }): void;
+  /**
+   * 人自己动了地图，跟随该停了。
+   *
+   * 由地图报而不是外面猜：只有这里分得清「人拖的」和「跟随自己挪的」——
+   * `panTo` 不会触发 `dragstart`，所以这个事件只在真的有人拖动时发出。少了它，
+   * 跟随开着的时候地图会把人每一次拖动都拽回去，那不是跟随，是抢方向盘。
+   */
+  (e: "follow-cancel"): void;
 }>();
 
 /** Below this zoom, parked and taxiing aircraft are hidden — at world scale a
@@ -323,13 +340,18 @@ function iconScale(): number {
 
 /** Everything a pilot marker's appearance depends on. An unchanged signature
  *  means the marker's DOM can stay exactly as it is. */
-function pilotSignature(pilot: Pilot, selected: boolean): string {
+function pilotSignature(
+  pilot: Pilot,
+  selected: boolean,
+  mine: boolean,
+): string {
   return [
     isOnGround(pilot) ? "g" : "a",
     Math.round(pilot.heading),
     altitudeColor(pilot.altitude, props.theme),
     iconScale(),
     selected ? "s" : "",
+    mine ? "m" : "",
   ].join("|");
 }
 
@@ -344,8 +366,17 @@ function pilotSignature(pilot: Pilot, selected: boolean): string {
  *
  * The silhouette points up-right in its own viewBox, hence the 45° offset
  * before the heading is applied.
+ *
+ * 两种记号可以同时戴：选中的那一圈白边，和「这是我自己」的那一圈品牌色。自己
+ * 那架画在里圈 —— 选中会换人，而它整个航段都是同一架，里圈是不会被挪走的那一
+ * 层。用 `var(--vr-brand)` 而不是写死的色号：标记是 DOM（`preferCanvas` 只管
+ * 向量图层），所以自定义属性在这里是认的，品牌色仍然只有一处定义。
  */
-function aircraftIcon(pilot: Pilot, selected: boolean): L.DivIcon {
+function aircraftIcon(
+  pilot: Pilot,
+  selected: boolean,
+  mine: boolean,
+): L.DivIcon {
   const color = altitudeColor(pilot.altitude, props.theme);
   const onGround = isOnGround(pilot);
 
@@ -355,6 +386,11 @@ function aircraftIcon(pilot: Pilot, selected: boolean): L.DivIcon {
   const anchor = size / 2;
   const svgSize = size - 4;
 
+  const rings = [
+    mine ? "0 0 0 2px var(--vr-brand)" : "",
+    selected ? `0 0 0 ${mine ? 4 : 2}px rgba(255,255,255,.7)` : "",
+  ].filter(Boolean);
+
   return L.divIcon({
     className: "aircraft-marker",
     html: `
@@ -362,7 +398,7 @@ function aircraftIcon(pilot: Pilot, selected: boolean): L.DivIcon {
         width:${size}px;height:${size}px;
         transform: rotate(${pilot.heading - 45}deg);
         display:flex;align-items:center;justify-content:center;
-        ${selected ? "border-radius:50%;box-shadow:0 0 0 2px rgba(255,255,255,.7);" : ""}
+        ${rings.length ? `border-radius:50%;box-shadow:${rings.join(",")};` : ""}
       ">
         <svg width="${svgSize}" height="${svgSize}" viewBox="0 0 24 24" fill="none"
           stroke="${color}" stroke-width="${onGround ? 2.4 : 2}"
@@ -478,12 +514,13 @@ function syncPilots() {
 
     const onGround = isOnGround(pilot);
     const selected = props.selected === key;
-    const signature = pilotSignature(pilot, selected);
+    const mine = props.mine === key;
+    const signature = pilotSignature(pilot, selected, mine);
 
     let marker = pilotMarkers.get(key);
     if (!marker) {
       marker = L.marker([lat, lon], {
-        icon: aircraftIcon(pilot, selected),
+        icon: aircraftIcon(pilot, selected, mine),
         riseOnHover: true,
       });
       marker.bindTooltip(() => pilotTooltip(key), {
@@ -497,7 +534,7 @@ function syncPilots() {
     } else {
       marker.setLatLng([lat, lon]);
       if (iconSignatures.get(key) !== signature) {
-        marker.setIcon(aircraftIcon(pilot, selected));
+        marker.setIcon(aircraftIcon(pilot, selected, mine));
         iconSignatures.set(key, signature);
       }
       // Took off or landed since the last poll — move it between the layers
@@ -1707,8 +1744,9 @@ function refreshSelection(previous?: string | null) {
     const pilotMarker = pilotMarkers.get(key);
     if (pilot && pilotMarker) {
       const selected = props.selected === key;
-      pilotMarker.setIcon(aircraftIcon(pilot, selected));
-      iconSignatures.set(key, pilotSignature(pilot, selected));
+      const mine = props.mine === key;
+      pilotMarker.setIcon(aircraftIcon(pilot, selected, mine));
+      iconSignatures.set(key, pilotSignature(pilot, selected, mine));
       continue;
     }
 
@@ -1775,6 +1813,31 @@ function focus(key: string) {
     map.fitBounds(shapes[0].getBounds(), { padding: [40, 40], maxZoom: 7 });
     return;
   }
+}
+
+/**
+ * 跟随自己那架：把它挪回画面中央。
+ *
+ * `panTo` 而不是 `setView`：**缩放一个字都不动**。跟着自己飞的人多半正把比例
+ * 尺调在他要的那一档（进近时拉近看跑道，巡航时拉远看航路），每三十秒替他重设
+ * 一次缩放，比不跟随还烦人。
+ *
+ * 已经在画面中间那一小块里就不动 —— 每次刷新都来一次动画，会让整张图看上去一
+ * 直在轻微地晃。
+ */
+function keepFollowing() {
+  if (!map || !props.follow || !props.mine) return;
+  const marker = pilotMarkers.get(props.mine);
+  if (!marker) return;
+
+  const target = marker.getLatLng();
+  const size = map.getSize();
+  const offset = map.latLngToContainerPoint(target).subtract(size.divideBy(2));
+  // 画面短边的六分之一 —— 大约是「还在中间」的那一块。
+  const slack = Math.min(size.x, size.y) / 6;
+  if (Math.abs(offset.x) < slack && Math.abs(offset.y) < slack) return;
+
+  map.panTo(target, { animate: true });
 }
 
 /**
@@ -1895,9 +1958,10 @@ function rescaleIcons() {
     const pilot = pilotData.get(key);
     if (!pilot) continue;
     const selected = props.selected === key;
-    const signature = pilotSignature(pilot, selected);
+    const mine = props.mine === key;
+    const signature = pilotSignature(pilot, selected, mine);
     if (iconSignatures.get(key) === signature) continue;
-    marker.setIcon(aircraftIcon(pilot, selected));
+    marker.setIcon(aircraftIcon(pilot, selected, mine));
     iconSignatures.set(key, signature);
   }
 }
@@ -2011,6 +2075,12 @@ onMounted(async () => {
   // Clicking empty map clears the selection, the way the list expects.
   map.on("click", () => emit("select", null));
 
+  // 人一上手拖地图，跟随就停。`dragstart` 只有真的有人在拖时才触发 —— 跟随自
+  // 己用的 `panTo` 不算拖动，所以这里不会自己把自己关掉。
+  map.on("dragstart", () => {
+    if (props.follow) emit("follow-cancel");
+  });
+
   syncStations();
   syncTracons();
   syncPilots();
@@ -2035,6 +2105,31 @@ watch(
     if (props.selected) loadTrack(props.selected);
     drawRoute();
     fitToTraffic();
+    // 位置刚更新过，跟随要在这之后 —— 反过来写会永远慢一拍，跟着的是上一次的
+    // 坐标。
+    keepFollowing();
+  },
+);
+
+/**
+ * 自己那架换了（登录、登出、上线、下线）。
+ *
+ * 只需要重画记号：`rescaleIcons` 会逐个比对签名，而签名里带着「是不是我」，所
+ * 以它正好只重画摘下和戴上记号的那两架。
+ */
+watch(
+  () => props.mine,
+  () => {
+    rescaleIcons();
+    keepFollowing();
+  },
+);
+
+// 刚打开跟随时先挪一次，不等下一轮刷新 —— 三十秒的沉默会让人以为按钮没生效。
+watch(
+  () => props.follow,
+  (on) => {
+    if (on) keepFollowing();
   },
 );
 

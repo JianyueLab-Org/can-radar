@@ -31,6 +31,16 @@ export interface RadarSettings {
   /** 管制员的覆盖范围环。 */
   rangeRings: boolean;
   units: Units;
+  /**
+   * 跟随自己那架飞机。
+   *
+   * 放在设置里（而不是视图里）是这个文件开头那条界线的直接结果：它是**这个人
+   * 的习惯**，不是「这一刻在看什么」。跟着自己飞的人下次打开还想跟着；而发给
+   * 别人的链接绝不该让对方的地图追着我的飞机跑 —— 那架飞机甚至不在他的名下。
+   *
+   * 默认关。没登录、或者登录了没连线时它什么也不做。
+   */
+  followMine: boolean;
 }
 
 export const DEFAULT_SETTINGS: RadarSettings = {
@@ -39,6 +49,7 @@ export const DEFAULT_SETTINGS: RadarSettings = {
   airportTags: true,
   rangeRings: true,
   units: "aviation",
+  followMine: false,
 };
 
 const SETTINGS_KEY = "can-radar:settings";
@@ -68,6 +79,7 @@ export function loadSettings(): RadarSettings {
       ["aviation", "metric"] as const,
       DEFAULT_SETTINGS.units,
     ),
+    followMine: bool(raw.followMine, DEFAULT_SETTINGS.followMine),
   };
 }
 

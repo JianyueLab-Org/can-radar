@@ -28,6 +28,8 @@ const props = defineProps<{
   departureOptions: { icao: string; count: number }[];
   arrivalOptions: { icao: string; count: number }[];
   selected: string | null;
+  /** 看这张名单的人自己那架飞机的键。它在名单里也戴一个记号。 */
+  mine?: string | null;
   theme: "dark" | "light";
 }>();
 
@@ -193,7 +195,15 @@ function pilotKey(pilot: Pilot): string {
                 aria-hidden="true"
               />
               <span class="rt-row_main">
-                <span class="rt-row_callsign">{{ p.callsign }}</span>
+                <span class="rt-row_callsign">
+                  {{ p.callsign }}
+                  <!-- 自己那架。名单按呼号排，自己那一行不会总在看得见的地方，
+                       所以它得自己认领一个记号 —— 和地图上那架戴的是同一个品牌
+                       色的圈。 -->
+                  <span v-if="mine === pilotKey(p)" class="rt-row_mine">
+                    {{ t("mine.tag") }}
+                  </span>
+                </span>
                 <span class="rt-row_sub vr-mono">
                   {{ p.flight_plan?.departure || "----" }} →
                   {{ p.flight_plan?.arrival || "----" }}
@@ -420,6 +430,20 @@ function pilotKey(pilot: Pilot): string {
   width: 8px;
   height: 8px;
   border-radius: 50%;
+}
+
+.rt-row_mine {
+  margin-left: 6px;
+  padding: 1px 4px;
+  border: 1px solid var(--vr-brand);
+  border-radius: 3px;
+
+  font-family: var(--vr-font);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--vr-brand);
+  vertical-align: 1px;
 }
 
 .rt-row_main {

@@ -1,5 +1,6 @@
 import type { APIContext } from "astro";
 
+import { apiOrigin } from "@/server/config";
 import { LIMITS, clientIp, enforce } from "@/server/rateLimit";
 
 /**
@@ -16,9 +17,7 @@ import { LIMITS, clientIp, enforce } from "@/server/rateLimit";
  *    气源。METAR 半小时才换一次，这里放五分钟的缓存，绝大多数点击就落在缓存上。
  */
 
-const UPSTREAM = (
-  process.env.CAN_API_ORIGIN || "https://api.airwaysn.org"
-).replace(/\/+$/, "");
+const UPSTREAM = apiOrigin();
 
 /** 四位字母数字。上游也会校验，这里先挡一道是为了不把垃圾转发出去。 */
 const ICAO = /^[A-Za-z0-9]{4}$/;

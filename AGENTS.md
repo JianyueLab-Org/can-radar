@@ -3,7 +3,7 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 CAN 在线雷达，从 can-web 拆出来。Astro SSR + Vue 岛屿 + Tailwind v4 + Leaflet。
-没有登录。README 是给人读的那一份。
+**没有自己的登录**，但认得出网络的会话（见第 5 条）。README 是给人读的那一份。
 
 ## 命令
 
@@ -16,7 +16,7 @@ bun run build && bun run start
 没有测试套件。门禁是 `bun run lint` 加一次 `bun run build`。
 `astro check` 看不见 `.vue`，所以 `typecheck` 同时跑 `vue-tsc`——两个都要留着。
 
-## 四条要紧的
+## 五条要紧的
 
 **1. 导航数据不在这个站点里，一点都没有。** 它曾经在（`NAVDATA_DIR` 挂进来、
 `src/server/navdata.ts` 解析），现在整件事在 **can-api 的 `internal/navdata/`**，
@@ -33,6 +33,30 @@ bun run build && bun run start
 
 **4. 页眉链接要走 `site()`。** 这里是另一个源，写 `href="/roster"` 会打在
 radar.airwaysn.org 上然后 404。`siteOrigin` 默认指向主站。
+
+**5. 这个站点认得出会话，但没有登录。** 两句话都要成立，缺一句就会有人写错东西。
+
+会话 cookie（`can_session`）由 can-api 签发，`COOKIE_DOMAIN` 是**父域**
+`.airwaysn.org` —— 它必须如此，否则 can-web 和 can-dev 也看不见它。
+radar.airwaysn.org 是那个域下面的一台主机，所以那枚 cookie 一直都被浏览器送到
+这里，只是以前没人读。`src/server/session.ts` 把它转发给 can-api 的
+`/api/v1/auth/session` 问一次「这是谁」，就这些。
+
+- **不要在这里验签。** 验签要 `SESSION_SECRET`，而那是「能签发任何人的会话」
+  的能力 —— 全网最公开的这个部署不该有第二处存放点。拿 cookie 去问，这个站点
+  就永远只是个读者。
+- **不要在这里放密码表单。** 登录入口只有主站一个（`/signin`）。多一个输密码
+  的地方就是多一个钓鱼面，而这一页恰恰是最多人直接打开的那个。
+- **没有 cookie 就不问上游。** 匿名流量是这一页的绝大多数，带 cookie 才调用，
+  否则每个爬虫都会变成 can-api 的一次数据库读。
+- **认出人的那份 HTML 不能被缓存**（`index.astro` 里那个 `private, no-store`）。
+- **`/api/v1/signout` 是本站唯一的写操作**，它连带着 `astro.config.mjs` 里关掉
+  的 `checkOrigin` 和 `src/server/guard.ts` —— 三件事一起读，理由写在那两个文件
+  里（反代 + TLS 终止会让 Astro 自带的那道检查永远 403）。
+
+登录之后多出来的功能只有一个：**认出哪一架飞机是你的**（数据源里的 `cid` 就是
+成员的 `username`，见 `src/lib/member.ts`），然后在地图和名单上给它一个记号、
+可以跟着它。数据本身一个字节都没多要 —— 那架飞机本来就在公开数据源里。
 
 ## 外观：这个站不再跟 can-web 一套皮
 

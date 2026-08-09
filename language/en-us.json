@@ -5,6 +5,7 @@
     "onlineMap": "Radar",
     "signin": "Sign In",
     "panel": "Pilots Panel",
+    "signout": "Sign out",
     "roster": "ATC Roster",
     "home": "Home",
     "openMenu": "Open main menu",
@@ -64,6 +65,12 @@
       "online": "Online for",
       "remaining": "Remaining",
       "eta": "ETA"
+    },
+    "mine": {
+      "follow": "Follow my aircraft",
+      "stop": "Stop following",
+      "offline": "Not connected",
+      "tag": "ME"
     },
     "settings": {
       "title": "Settings",

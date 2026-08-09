@@ -37,6 +37,16 @@ export const LIMITS = {
   /** 机场天气。按 IP 计。这一桶比航迹松：一份 METAR 半小时才换一次，而它前面
    *  还有一层短缓存，所以真正打到上游的次数远小于这里的数字。 */
   metar: { limit: 240, windowMs: HOUR },
+  /** 「我现在是谁」。按 IP 计。
+   *
+   *  首屏不走这条路（会话是服务端读好传进岛屿的），它只在标签页重新获得焦点、
+   *  而且这一页还认为你没登录的时候问一次 —— 也就是「刚在另一个标签页登录完」
+   *  那一刻。带 cookie 的请求才会真的打到 can-api，所以这一桶挡的主要是拿它当
+   *  空转接口刷的量。 */
+  session: { limit: 240, windowMs: HOUR },
+  /** 登出。按 IP 计，松一点没有意义 —— 一个人一小时点不了 60 次退出，而这条路
+   *  由是本站唯一的写操作，值得有一个自己的上限。 */
+  signout: { limit: 60, windowMs: HOUR },
 } as const satisfies Record<string, RateLimitRule>;
 
 type Bucket = { count: number; resetAt: number };
