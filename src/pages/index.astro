@@ -3,34 +3,57 @@ import BaseLayout from "@/layouts/BaseLayout.astro";
 import Header from "@/components/Header.vue";
 import Radar from "@/components/Radar.vue";
 import { getLocale, getMessages } from "@/lib/i18n";
+import { webOrigin } from "@/server/config";
+import { readMember } from "@/server/session";
 
 const locale = getLocale(Astro.cookies);
 const headerMessages = getMessages(locale, "header");
 const radarMessages = getMessages(locale, "radar");
+
 /**
- * 雷达站上没有会话，也拿不到主站的会话。
+ * 雷达站认得出登录着的人了。
  *
- * can-web 的会话 cookie 是 HttpOnly 且绑在 airwaysn.org 上的，跨源读不到 ——
- * 所以这里没有办法知道来的人登没登录，只能一律按未登录渲染。代价只是导航上
- * 那一格永远写着「登录」；点过去落在主站，本来就登录着的人会直接进面板。
+ * 这里以前写着「拿不到主站的会话，只能一律按未登录渲染」，而那句话现在是错
+ * 的 —— 它写于 Auth.js 时期，那时的会话 cookie 绑在 airwaysn.org 这台主机上。
+ * 数据层搬进 can-api 之后，会话由 can-api 签发，Domain 是**父域**
+ * `.airwaysn.org`（它必须如此，否则 can-web 和 can-dev 也看不见它）。
+ * radar.airwaysn.org 是那个域下面的一台主机，所以那枚 cookie 一直都被浏览器
+ * 送到这里来，只是从来没有人读。
  *
- * 反过来做（把会话状态跨源传过来）要么要一个共享 cookie 域，要么要一次
- * 跨站请求，两者都是为了一个字的文案去开一个口子。
+ * 在服务端读（而不是让岛屿去问）是因为 cookie 是 HttpOnly 的，也因为这样首屏
+ * 就是对的：没有「先画成未登录、一闪之后再变成登录」的那一下。
+ *
+ * 会话读不到 —— 上游超时、can-api 在滚动更新 —— 就是 null，页面照常渲染成未
+ * 登录的样子。地图不需要会话也能看。
  */
-const loggedIn = false;
+const member = await readMember(Astro);
+const siteOrigin = webOrigin();
+
+/**
+ * 认出了人的那一份 HTML 是**因人而异**的，不能被任何一层缓存下来。
+ *
+ * 这一页在 Cloudflare 后面。默认它不缓存 HTML，所以今天没有人会踩到；写下来是
+ * 因为哪天有人为了这张图的加载速度在边上加一条缓存规则时，这一行是唯一拦住
+ * 「甲的名字出现在乙的页眉上」的东西。匿名的那一份没有这个头，照旧可缓存。
+ */
+if (member) {
+  Astro.response.headers.set("Cache-Control", "private, no-store");
+}
 ---
 
 <BaseLayout title="Radar · Cerulean Aviation Network" floatingControls={false}>
   <div class="flex h-dvh flex-col overflow-hidden bg-surface">
     <Header
-      loggedIn={loggedIn}
+      loggedIn={!!member}
+      memberName={member?.name ?? ""}
       messages={headerMessages}
       pathname={Astro.url.pathname}
       locale={locale}
+      siteOrigin={siteOrigin}
       client:load
     />
     <main id="main-content" tabindex="-1" class="flex min-h-0 flex-1 flex-col">
-      <Radar messages={radarMessages} client:only="vue" />
+      <Radar messages={radarMessages} member={member} client:only="vue" />
     </main>
   </div>
 </BaseLayout>

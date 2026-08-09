@@ -5,6 +5,7 @@
     "onlineMap": "雷達",
     "signin": "登入",
     "panel": "飛行員面板",
+    "signout": "登出",
     "roster": "管制員名冊",
     "home": "首頁",
     "openMenu": "開啟選單",
@@ -64,6 +65,12 @@
       "online": "已在線",
       "remaining": "剩餘",
       "eta": "預計到達"
+    },
+    "mine": {
+      "follow": "跟隨我的飛機",
+      "stop": "停止跟隨",
+      "offline": "未連線",
+      "tag": "我"
     },
     "settings": {
       "title": "設定",

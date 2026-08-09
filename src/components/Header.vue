@@ -13,7 +13,7 @@
  * 滚动阴影也跟着去掉了：这一页的 body 永远不滚（`h-dvh overflow-hidden`），那个
  * 监听器从拆分出来的第一天起就没有触发过。
  */
-import { computed, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { createTranslator } from "@/lib/i18n";
 import { useOverlay } from "@/lib/useOverlay";
 import Icon from "@/components/ui/Icon.vue";
@@ -22,6 +22,8 @@ import ThemeLangControls from "@/components/ui/ThemeLangControls.vue";
 const props = withDefaults(
   defineProps<{
     loggedIn: boolean;
+    /** 登录着的人的名字，只用来在页眉上显示。空字符串就只显示按钮。 */
+    memberName?: string;
     messages: Record<string, unknown>;
     /** Current path, used to mark the active nav item. */
     pathname?: string;
@@ -35,7 +37,12 @@ const props = withDefaults(
      */
     siteOrigin?: string;
   }>(),
-  { pathname: "", locale: "zh-cn", siteOrigin: "https://airwaysn.org" },
+  {
+    memberName: "",
+    pathname: "",
+    locale: "zh-cn",
+    siteOrigin: "https://airwaysn.org",
+  },
 );
 
 /** 主站上的一条路径。本站只有雷达自己一个页面。 */
@@ -43,6 +50,29 @@ const site = (path: string) => `${props.siteOrigin}${path}`;
 
 const t = createTranslator(props.messages);
 const mobileMenuOpen = ref(false);
+const signingOut = ref(false);
+
+/**
+ * 登出。
+ *
+ * 成功之后**整页重载**，而不是把 `loggedIn` 改成 false：会话是服务端渲染时读
+ * 进来的 prop，页面上还有别处（雷达岛屿里的「我的飞机」）也拿着它。让服务端重
+ * 新渲染一次是唯一能保证整页一致的做法，也顺手证明了 cookie 真的清掉了。
+ */
+async function signOut() {
+  if (signingOut.value) return;
+  signingOut.value = true;
+  try {
+    await fetch("/api/v1/signout", {
+      method: "POST",
+      headers: { Accept: "application/json" },
+    });
+  } catch {
+    // 网络断了。下面照样重载 —— 会话还在的话，页面会重新渲染成登录着的样子，
+    // 那正是此刻的事实，比一个「已退出」的假象诚实。
+  }
+  window.location.reload();
+}
 
 // Escape to close, focus trapped inside, focus returned to the trigger.
 const mobilePanel = useOverlay(mobileMenuOpen);
@@ -66,6 +96,54 @@ function isActive(href: string) {
 function navHref(href: string) {
   return href.startsWith("/") && href !== "/" ? site(href) : href;
 }
+
+/* ------------------------------------------------------------------ *
+ * 在别处登录完，回到这个标签页
+ *
+ * 登录入口在主站，所以「登录」是一个跳走的链接（这个站点没有密码表单，也不该
+ * 有）。人在那边登录完切回来时，浏览器里已经有会话 cookie 了 —— 但这一页是十
+ * 分钟前渲染的，它并不知道。
+ *
+ * 于是标签页重新拿到焦点时问一次本站的 `/api/v1/session`，真的有人了就整页重
+ * 载，让服务端重新渲染。少了这一步，唯一的出路是让人自己按刷新，而「我明明登
+ * 录了」是一种没有人会去报的 bug。
+ *
+ * **只在这一页认为没登录时才问**：这是唯一会变的方向。反过来（会话在别处被登
+ * 出）不值得为它每次切回来都打一次请求，何况把人正在看的地图刷掉更烦人。
+ * ------------------------------------------------------------------ */
+
+/** 两次探测之间至少隔这么久。切标签页是个高频动作。 */
+const RECHECK_MS = 15000;
+let lastCheck = 0;
+
+async function recheckSession() {
+  if (props.loggedIn || document.visibilityState !== "visible") return;
+
+  const now = Date.now();
+  if (now - lastCheck < RECHECK_MS) return;
+  lastCheck = now;
+
+  try {
+    const response = await fetch("/api/v1/session", {
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) return;
+    const body = (await response.json()) as { user?: unknown };
+    if (body.user) window.location.reload();
+  } catch {
+    // 断网、限流。下次切回来再说。
+  }
+}
+
+onMounted(() => {
+  document.addEventListener("visibilitychange", recheckSession);
+  window.addEventListener("focus", recheckSession);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener("visibilitychange", recheckSession);
+  window.removeEventListener("focus", recheckSession);
+});
 </script>
 
 <template>
@@ -97,9 +175,26 @@ function navHref(href: string) {
         </div>
 
         <div class="vh_section">
+          <!-- 名字在按钮左边，不在按钮里：那个按钮去的是主站的飞行员面板，而
+               名字回答的是「这一页认得我吗」。塞进同一个控件里，两件事都说不
+               清楚。 -->
+          <span v-if="loggedIn && memberName" class="vh_who">
+            {{ memberName }}
+          </span>
           <a class="vh_cta" :href="site(loggedIn ? '/pilots' : '/signin')">
             {{ loggedIn ? t("panel") : t("signin") }}
           </a>
+          <button
+            v-if="loggedIn"
+            type="button"
+            class="vh_burger vh_signout"
+            :disabled="signingOut"
+            :title="t('signout')"
+            @click="signOut"
+          >
+            <span class="sr-only">{{ t("signout") }}</span>
+            <Icon name="arrowRightOnRectangle" />
+          </button>
         </div>
 
         <button type="button" class="vh_burger" @click="mobileMenuOpen = true">
@@ -156,6 +251,9 @@ function navHref(href: string) {
         </div>
 
         <div class="vh_mobile_cta">
+          <span v-if="loggedIn && memberName" class="vh_who vh_who--block">
+            {{ memberName }}
+          </span>
           <a
             class="vh_cta vh_cta--block"
             :href="site(loggedIn ? '/pilots' : '/signin')"
@@ -163,6 +261,16 @@ function navHref(href: string) {
             {{ loggedIn ? t("panel") : t("signin") }}
             <Icon name="arrowRight" />
           </a>
+          <button
+            v-if="loggedIn"
+            type="button"
+            class="vh_mobile_link vh_mobile_signout"
+            :disabled="signingOut"
+            @click="signOut"
+          >
+            <Icon name="arrowRightOnRectangle" />
+            {{ t("signout") }}
+          </button>
         </div>
 
         <div class="vh_mobile_foot">
@@ -352,6 +460,59 @@ function navHref(href: string) {
 .vh_cta--block {
   width: 100%;
   min-height: 40px;
+}
+
+/* ——— 登录着的那个人 ——— */
+
+.vh_who {
+  overflow: hidden;
+
+  max-width: 12ch;
+
+  font-size: 13px;
+  color: var(--vr-t2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.vh_who--block {
+  display: block;
+  max-width: none;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+/* 退出在这个宽度下是一个图标 —— 它和「飞行员面板」不是一个重量级的动作，给它
+   同样大的一块会让人误点。小屏上收起来，移动菜单里有一条带文字的。 */
+.vh_signout {
+  display: none;
+}
+@media (min-width: 640px) {
+  .vh_signout {
+    display: inline-flex;
+  }
+}
+.vh_signout:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.vh_mobile_signout {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+
+  width: 100%;
+  margin-top: 8px;
+  border: none;
+
+  color: var(--vr-t3);
+
+  background: transparent;
+  cursor: pointer;
+}
+.vh_mobile_signout :deep(svg) {
+  width: 18px;
+  height: 18px;
 }
 
 .vh_burger {

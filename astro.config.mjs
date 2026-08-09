@@ -12,12 +12,32 @@ import tailwindcss from "@tailwindcss/vite";
  * 个几十兆的 gz，把航路解析成坐标。那些文件是按查找键排好序、就地二分的
  * （见 src/server/navdata.ts），预渲染没有意义。
  *
- * 这个站点**没有登录**，也不该有。它在 can-web 里的时候就不在
- * PROTECTED_PREFIXES 里，数据全部来自 can-fsd 的公开数据源。
+ * 这个站点**没有自己的登录**，也不该有：没有密码表单、没有会话格式、没有数据
+ * 库口令。它只是认得出浏览器**本来就带着**的那枚网络会话 cookie（can-api 签
+ * 的，Domain 是父域 `.airwaysn.org`），认出来之后能把你自己的那架飞机指出来。
+ * 登录入口仍然只有主站一个，见 `src/server/session.ts`。
  */
 export default defineConfig({
   output: "server",
   adapter: node({ mode: "standalone" }),
   integrations: [vue()],
+
+  /**
+   * **必须关掉，否则登出那个 POST 永远是 403。**
+   *
+   * Astro 在 SSR 下默认开着 `checkOrigin`：它从 `Host` 头推出本站的 origin，
+   * 再和浏览器发来的 `Origin` 比对。这个站跑在 TLS 终止的反代后面 —— 推出来
+   * 的是 `http://radar.airwaysn.org`，浏览器发的是 `https://…`，**永远对不
+   * 上**。can-web 从一开始就关掉了它，can-dev 是踩了才关的，而两边第一个撞上
+   * 的都是登出。
+   *
+   * 在这个仓库里这一条是新长出来的：`/api/v1/signout` 之前，这个站点一个写操
+   * 作都没有，所以这个默认值从来没有机会伤到人。
+   *
+   * 关掉不等于不检查 —— 写操作的 Origin 由 `src/server/guard.ts` 比对**显式
+   * 配置**的 `PUBLIC_ORIGIN`，那个值不是从请求头推的，反代动不了它。
+   */
+  security: { checkOrigin: false },
+
   vite: { plugins: [tailwindcss()] },
 });

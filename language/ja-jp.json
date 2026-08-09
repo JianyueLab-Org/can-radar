@@ -5,6 +5,7 @@
     "onlineMap": "レーダー",
     "signin": "ログイン",
     "panel": "パイロットパネル",
+    "signout": "ログアウト",
     "roster": "管制員名簿",
     "home": "ホーム",
     "openMenu": "メニューを開く",
@@ -64,6 +65,12 @@
       "online": "接続時間",
       "remaining": "残り",
       "eta": "到着予定"
+    },
+    "mine": {
+      "follow": "自機を追尾",
+      "stop": "追尾を解除",
+      "offline": "未接続",
+      "tag": "自機"
     },
     "settings": {
       "title": "設定",

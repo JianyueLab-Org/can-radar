@@ -1,5 +1,6 @@
 import type { APIContext } from "astro";
 
+import { apiOrigin } from "@/server/config";
 import { LIMITS, clientIp, enforce } from "@/server/rateLimit";
 
 /**
@@ -22,9 +23,7 @@ import { LIMITS, clientIp, enforce } from "@/server/rateLimit";
  * 挡我们。真正的天花板是那一个。
  */
 
-const UPSTREAM = (
-  process.env.CAN_API_ORIGIN || "https://api.airwaysn.org"
-).replace(/\/+$/, "");
+const UPSTREAM = apiOrigin();
 
 /** 只放行认识的查询参数，原样带过去。 */
 const PASS_THROUGH = ["departure", "arrival", "route"] as const;
