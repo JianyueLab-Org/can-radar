@@ -1021,8 +1021,34 @@ function worksOceanic(callsign: string): boolean {
     .some((part) => part === "O" || part === "OCN" || part === "OCEANIC");
 }
 
+/**
+ * 空闲时不画的那些边界 —— 被拆开的扇区。
+ *
+ * `boundaries.geojson` 里 768 个要素中有 343 个是扇区划分（`ADR-E`、`BIRD-N`
+ * 这样），它们**画在自己所属 FIR 的多边形之上**。全部铺开的结果是每个被拆过的
+ * FIR 都有一圈外框加两到五条内部分割线，叠成一张网 —— 这就是那片杂乱。
+ *
+ * 判据是「父 FIR 也在这份数据里」，不是「id 里有连字符」。有 22 个子扇区找不到
+ * 父要素（`TEH-*`、`LGMD-*`，以及**这张网络自己的 `ZJSY-*` 三亚**），按连字符
+ * 一刀切会让那几块空域整个消失。
+ *
+ * 只影响**空闲**图层：一旦有人上了某个扇区，syncBoundaries 会把它挪进
+ * boundariesLayer 照常高亮 —— 「这块被拆开的空域现在有人管」恰恰是必须画出来的
+ * 那种信息。
+ */
+const idleHiddenBoundaries = new Set<string>();
+
 function buildBoundaries(data: GeoJSON.FeatureCollection) {
   if (!quietBoundariesLayer) return;
+
+  const rawIds = new Set<string>();
+  for (const feature of data.features) {
+    const id =
+      feature.properties?.ID ||
+      feature.properties?.id ||
+      feature.properties?.name;
+    if (id) rawIds.add(String(id));
+  }
 
   for (const feature of data.features) {
     const boundaryId =
@@ -1033,15 +1059,17 @@ function buildBoundaries(data: GeoJSON.FeatureCollection) {
 
     knownBoundaryIds.add(String(boundaryId).toLowerCase());
 
-    const key = boundaryKey(
-      String(boundaryId),
-      String(feature.properties?.oceanic) === "1",
-    );
+    const raw = String(boundaryId);
+    const key = boundaryKey(raw, String(feature.properties?.oceanic) === "1");
+
+    const parent = raw.includes("-") ? raw.slice(0, raw.indexOf("-")) : null;
+    if (parent && rawIds.has(parent)) idleHiddenBoundaries.add(key);
+
     const shape = L.geoJSON(feature, { style: inactiveStyle() });
     const shapes = boundaryShapes.get(key) ?? [];
     shapes.push(shape);
     boundaryShapes.set(key, shapes);
-    quietBoundariesLayer.addLayer(shape);
+    if (!idleHiddenBoundaries.has(key)) quietBoundariesLayer.addLayer(shape);
   }
 }
 
@@ -1140,7 +1168,11 @@ function syncBoundaries() {
       // A staffed sector is always drawn; an unstaffed one is subject to the
       // zoom filter, so the two live in different layers.
       (isActive ? quietBoundariesLayer : boundariesLayer)?.removeLayer(shape);
-      (isActive ? boundariesLayer : quietBoundariesLayer)?.addLayer(shape);
+      // 空闲的扇区划分不画回去（见 idleHiddenBoundaries）—— 少了这个判断，一个
+      // 上过线又下线的扇区就会作为一条内部分割线永久留在图上。
+      if (isActive) boundariesLayer?.addLayer(shape);
+      else if (!idleHiddenBoundaries.has(boundaryId))
+        quietBoundariesLayer?.addLayer(shape);
       shape.off("click");
       if (isActive) {
         // Selecting the sector selects whoever is working it, so the details
@@ -1571,7 +1603,6 @@ function drawRouteLine(ahead: RoutePoint[], position: LatLon, color: string) {
 }
 
 /** How many waypoints one airway label is expected to cover. */
-const VIA_LABEL_SPACING = 12;
 
 /**
  * Name each stretch of line that was flown along something — `W47`, `BOTP2G`.
@@ -1585,39 +1616,33 @@ const VIA_LABEL_SPACING = 12;
 function drawViaLabels(ahead: RoutePoint[], position: LatLon, color: string) {
   if (!routeLayer) return;
 
-  for (let start = 0; start < ahead.length; ) {
-    const via = ahead[start].via;
-    let end = start;
-    while (end + 1 < ahead.length && ahead[end + 1].via === via) end++;
+  /* 每一段都标，而不是一条航路只标两三处。
+   *
+   * 原来是按一个固定间距在一段长航路上均匀撒几个标签，于是「这一段是哪
+   * 条航路」这个问题，在两个标签之间的那些腿上是答不出来的 —— 而那正是有人放大
+   * 去看某一个航路点时所在的位置。
+   *
+   * **进离场程序不标。** 一条 SID 有十几条腿，每条都写一遍 LEKE1D 就是在同一个
+   * 词上堆十几个标签，而它们本来就挤在机场周围最小的那块地方。程序的名字在详情
+   * 卡的飞行计划里，那里只需要出现一次。
+   *
+   * 密度由缩放级别兜着（.show-via-labels，见 applyLabelFilter）：拉远到看不清
+   * 的时候整批标签都不画。 */
+  let from: LatLon = position;
 
-    if (!via) {
-      start = end + 1;
-      continue;
+  for (const point of ahead) {
+    const to: LatLon = [point.lat, point.lon];
+    const procedure = point.kind === "sid" || point.kind === "star";
+
+    if (point.via && !procedure) {
+      viaLabel(
+        [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2],
+        point.via,
+        color,
+      ).addTo(routeLayer);
     }
 
-    // The run's line starts at whatever it was joined from — the fix before
-    // it, or the aircraft when the route is already inside the airway.
-    const from: LatLon =
-      start === 0 ? position : [ahead[start - 1].lat, ahead[start - 1].lon];
-    const legs: LatLon[] = [
-      from,
-      ...ahead.slice(start, end + 1).map((p) => [p.lat, p.lon] as LatLon),
-    ];
-
-    const labels = Math.max(
-      1,
-      Math.round((legs.length - 1) / VIA_LABEL_SPACING),
-    );
-    for (let i = 0; i < labels; i++) {
-      const leg = Math.floor(((i + 0.5) * (legs.length - 1)) / labels);
-      const a = legs[leg];
-      const b = legs[leg + 1] ?? legs[leg];
-      viaLabel([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], via, color).addTo(
-        routeLayer,
-      );
-    }
-
-    start = end + 1;
+    from = to;
   }
 }
 

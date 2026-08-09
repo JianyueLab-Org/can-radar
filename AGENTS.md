@@ -97,6 +97,19 @@ navdata 的卷，所以没有任何运行时通路能补上它们：文件不在
 刷新的办法在 can-web：`data/vatspy/README.md` + `scripts/build-airports.mjs`。
 那边仍然是上游，这边是拷贝。
 
+## 空闲的扇区划分不画
+
+`boundaries.geojson` 的 768 个要素里有 343 个是扇区划分（`ADR-E`、`BIRD-N`），
+它们画在自己所属 FIR 的多边形之上 —— 全铺开就是每个被拆过的 FIR 一圈外框加几条
+内部分割线，叠成一张网。所以**没人管的时候只画 FIR 本身**（`idleHiddenBoundaries`）。
+
+判据是「父 FIR 也在这份数据里」，不是「id 里有连字符」：有 22 个子扇区找不到父
+要素，包括这张网络自己的 `ZJSY-*`（三亚）和 `TEH-*`，按连字符一刀切会让那几块空
+域整个消失。
+
+一旦有人上了某个扇区，syncBoundaries 照常把它挪进 boundariesLayer 高亮 —— 「这
+块被拆开的空域现在有人管」正是必须画出来的信息。
+
 ## 地图上的向量颜色在 `lib/radar.ts`
 
 管制区填色（`AREA_COLORS`）和航路线（`ROUTE_COLORS`）是 JS 字面量，不是
