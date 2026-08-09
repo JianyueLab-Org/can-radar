@@ -211,6 +211,19 @@ function select(key: string | null) {
   if (!selected.value) return;
 
   mapRef.value?.focus(selected.value);
+
+  /* 飞机和席位的详情在左边一栏，机场仍然在右边那一摞里 —— 所以「选中之后名单要
+   * 怎么办」这件事，两者的答案不一样。
+   *
+   * 窄屏上没有左右可分，两栏都是压在地图上的底部抽屉，叠在一起就是两层挡板。所
+   * 以选中飞机或席位时把名单收起来，让详情独占那块位置；机场卡本身就在名单那一
+   * 摞里，收掉名单等于把它一起收掉，那当然不行。 */
+  const detailIsOwnColumn = !key?.startsWith("apt:");
+  if (detailIsOwnColumn && window.innerWidth < 1024) {
+    railOpen.value = false;
+    return;
+  }
+
   // 从列表里点开一张卡时，把这一列滚回顶部 —— 新开的卡在最上面，而人的手指可能
   // 停在列表中段。
   railOpen.value = true;
@@ -485,8 +498,15 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
       </div>
     </div>
 
-    <!-- 右侧那一摞卡片 -->
-    <div v-if="railOpen" ref="railRef" class="radar_rail">
+    <!-- 左侧：选中的飞机 / 席位。
+
+         它在**地图左边**，和右边那一摞名单分开 —— 一边是「网络上有谁」，一边是
+         「我正在看谁」。两件事同时占着右边一列时，选中一架飞机会把名单整个推下
+         去，而人多半是想一边看这架、一边在名单里挑下一架。
+
+         窄屏上没有「左边」可言，所以它变成底部的一张抽屉，并且**选中的同时把名
+         单那张收起来** —— 见 select()。 -->
+    <div v-if="selectedPilot || selectedStation" class="radar_detail">
       <RadarDetails
         :messages="messages"
         :pilot="selectedPilot"
@@ -496,7 +516,10 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
         @close="selected = null"
         @locate="selected && mapRef?.focus(selected)"
       />
+    </div>
 
+    <!-- 右侧那一摞卡片 -->
+    <div v-if="railOpen" ref="railRef" class="radar_rail">
       <RadarAirport
         :messages="messages"
         :icao="selectedAirport"
@@ -753,6 +776,34 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
   color: var(--color-faint);
 }
 
+/* ——— 左侧：详情 ——— */
+
+.radar_detail {
+  position: absolute;
+  z-index: 5;
+  /* 让开左上角的状态条（12 + 40 高 + 12 的空隙）。 */
+  top: 64px;
+  left: 12px;
+  /* 也让开左下角那一列控件：四个 32px 的方块加三道 8px 的缝是 152px，控件本身
+     从 bottom: 28px 起，再留 12px 的空隙。写死这个数是因为控件的数量是写死的 ——
+     加第五个按钮时这里要跟着改，所以两处都留了这句注释。 */
+  bottom: 192px;
+
+  display: flex;
+  flex-direction: column;
+
+  width: 380px;
+  max-width: calc(100vw - 24px);
+  overflow-y: auto;
+  scrollbar-width: none;
+
+  /* 和右边那一列同理：只有卡片接事件，空白处仍然是可以拖的地图。 */
+  pointer-events: none;
+}
+.radar_detail::-webkit-scrollbar {
+  display: none;
+}
+
 /* ——— 右侧的卡片列 ——— */
 
 .radar_rail {
@@ -798,6 +849,9 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
      下半部分，而右上角是最够不着的那个角。 */
   /* 抽屉的下沿要让开版权条那一行。抽屉盖住它的话，署名就只在抽屉关着的时候
      可见 —— VATSpy 是 CC BY-SA，署名得在展示它的地方一直看得到。 */
+  /* 详情在窄屏上也是同一张底部抽屉 —— 没有左右可分。它和名单永远不会同时出现
+     （select() 里选中飞机/席位时把名单收掉），所以两者可以占同一块位置。 */
+  .radar_detail,
   .radar_rail {
     top: auto;
     right: 8px;
