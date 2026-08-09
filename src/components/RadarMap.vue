@@ -2235,7 +2235,7 @@ onBeforeUnmount(() => {
   position: absolute;
   /* 半个标记，这样标记本身落在航路点上、名字挂在它旁边。整个盒子居中的话，名
      字一出现标记就从航路点上走开了。数值跟着 .radar-fix__dot 的尺寸走。 */
-  transform: translate(-3.5px, -3px);
+  transform: translate(-6px, -5.25px);
   display: flex;
   align-items: center;
   gap: 3px;
@@ -2253,13 +2253,15 @@ onBeforeUnmount(() => {
    内联 SVG 而不是 CSS 的 border 三角形技巧：要的是描边加半透明填充，border 画
    出来的三角形是实心的，描不了边。 */
 .radar-fix__dot {
-  width: 7px;
-  height: 6px;
+  width: 12px;
+  height: 10.5px;
   flex: none;
   overflow: visible;
   fill: color-mix(in srgb, var(--vr-bg) 88%, transparent);
   stroke: var(--radar-fix-color, var(--vr-t3));
-  stroke-width: 1.4;
+  /* 描边按 viewBox 的单位算，元素放大它也跟着放大 —— 所以放大之后这个数要往
+     回收一点，否则三角形会从「一个描出来的形状」变成「一坨实心的」。 */
+  stroke-width: 1.2;
   stroke-linejoin: round;
 }
 
