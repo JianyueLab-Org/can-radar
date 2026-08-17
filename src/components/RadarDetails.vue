@@ -28,7 +28,7 @@ import { ratingTrans } from "@/lib/tools";
 import VrInfoPopup, {
   type InfoPopupSection,
 } from "@/components/vr/VrInfoPopup.vue";
-import Icon from "@/components/ui/Icon.vue";
+import { Icon } from "@jianyuelab-org/can-ui";
 import type { Controller, Pilot } from "@/lib/radarTypes";
 
 const props = defineProps<{

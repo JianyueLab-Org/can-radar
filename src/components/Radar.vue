@@ -20,7 +20,7 @@ import RadarAirport from "@/components/RadarAirport.vue";
 import RadarTraffic from "@/components/RadarTraffic.vue";
 import VrButton from "@/components/vr/VrButton.vue";
 import VrBubble from "@/components/vr/VrBubble.vue";
-import Icon from "@/components/ui/Icon.vue";
+import { Icon } from "@jianyuelab-org/can-ui";
 import { getFacilityName } from "@/lib/facilities";
 import { AREA_COLORS, altitudeLegend, facilityColor } from "@/lib/radar";
 import { createTranslator } from "@/lib/i18n";
