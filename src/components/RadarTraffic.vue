@@ -12,7 +12,7 @@
  */
 import { computed } from "vue";
 
-import Icon from "@/components/ui/Icon.vue";
+import { Icon } from "@jianyuelab-org/can-ui";
 import VrInfoPopup from "@/components/vr/VrInfoPopup.vue";
 import VrButton from "@/components/vr/VrButton.vue";
 import { getFacilityName } from "@/lib/facilities";
