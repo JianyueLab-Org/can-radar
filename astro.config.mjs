@@ -14,7 +14,7 @@ import tailwindcss from "@tailwindcss/vite";
  *
  * 这个站点**没有自己的登录**，也不该有：没有密码表单、没有会话格式、没有数据
  * 库口令。它只是认得出浏览器**本来就带着**的那枚网络会话 cookie（can-api 签
- * 的，Domain 是父域 `.airwaysn.org`），认出来之后能把你自己的那架飞机指出来。
+ * 的，Domain 是父域 `.ceruleanavi.net`），认出来之后能把你自己的那架飞机指出来。
  * 登录入口仍然只有主站一个，见 `src/server/session.ts`。
  */
 export default defineConfig({
@@ -27,7 +27,7 @@ export default defineConfig({
    *
    * Astro 在 SSR 下默认开着 `checkOrigin`：它从 `Host` 头推出本站的 origin，
    * 再和浏览器发来的 `Origin` 比对。这个站跑在 TLS 终止的反代后面 —— 推出来
-   * 的是 `http://radar.airwaysn.org`，浏览器发的是 `https://…`，**永远对不
+   * 的是 `http://radar.ceruleanavi.net`，浏览器发的是 `https://…`，**永远对不
    * 上**。can-web 从一开始就关掉了它，can-dev 是踩了才关的，而两边第一个撞上
    * 的都是登出。
    *

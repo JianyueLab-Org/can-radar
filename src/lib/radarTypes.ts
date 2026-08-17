@@ -3,7 +3,7 @@
  * under this hostname. There is no separate internal address: every route it
  * serves, datafeed and all, is on this origin.
  */
-export const FSD_ORIGIN = "https://data.airwaysn.org";
+export const FSD_ORIGIN = "https://data.ceruleanavi.net";
 
 /**
  * The live datafeed. Public and unauthenticated, which is why the islands

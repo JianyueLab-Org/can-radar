@@ -13,7 +13,7 @@ import { LIMITS, clientIp, enforce } from "@/server/rateLimit";
  *
  * 上游从 can-web 换成了 can-api —— 路径一个字都没变，换的只是主机，这正是那次
  * 迁移刻意保住的性质。仍然在服务端问、浏览器那边仍然是同源的一次 fetch，所以
- * **不用给 can-api 开 CORS**：radar.airwaysn.org 不在它的 ALLOWED_ORIGINS 里，
+ * **不用给 can-api 开 CORS**：radar.ceruleanavi.net 不在它的 ALLOWED_ORIGINS 里，
  * 也不需要在。
  *
  * 两处限流不是重复：这一桶挡的是打到我们这儿的量，can-api 那边还有它自己的一

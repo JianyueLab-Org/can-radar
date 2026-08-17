@@ -28,5 +28,5 @@ jobs:
       image: ghcr.io/jianyuelab-org/can-radar
       namespace: can-radar
       manifest: deploy/k8s.yaml
-      environment_url: https://radar.airwaysn.org
+      environment_url: https://radar.ceruleanavi.net
     secrets: inherit

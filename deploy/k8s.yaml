@@ -2,7 +2,7 @@
 #
 # 形状和 can-dev / llm-web 一致：一个应用一个 namespace，Deployment 和 Service
 # 都叫 app，Service 暴露 80，Ingress 走默认的 cloudflare-tunnel（控制器会把
-# radar.airwaysn.org 的 DNS 记录建好）。
+# radar.ceruleanavi.net 的 DNS 记录建好）。
 #
 # ---------------------------------------------------------------------------
 # 这里不再有导航数据
@@ -50,18 +50,18 @@ spec:
             # 只是主机。会话也问它：浏览器带来的 can_session 转发过去问一次
             # 「这是谁」，这个站点自己不验签（密钥不该在这个部署里）。
             - name: CAN_API_ORIGIN
-              value: https://api.airwaysn.org
+              value: https://api.ceruleanavi.net
             # 主站。页眉那排导航和唯一的登录入口指向它 —— 这里是另一个源。
             - name: CAN_WEB_ORIGIN
-              value: https://airwaysn.org
+              value: https://ceruleanavi.net
             # 本站自己的对外地址，只用来校验写操作（登出）的 Origin。
             #
             # **不能省。** 省掉的话它是开发机的 localhost，而浏览器发来的是
-            # https://radar.airwaysn.org，登出会稳定地 403。它是显式配置而不是
+            # https://radar.ceruleanavi.net，登出会稳定地 403。它是显式配置而不是
             # 从 Host 头推的：这个 Pod 前面是 cloudflare-tunnel，请求头里的东西
             # 正是那一层能改的东西（Astro 自带的 checkOrigin 也是因此关掉的）。
             - name: PUBLIC_ORIGIN
-              value: https://radar.airwaysn.org
+              value: https://radar.ceruleanavi.net
           # 首页不碰 can-web，所以它是个诚实的探活目标。注意它**不**能证明航
           # 路解析可用 —— can-api 那边没挂上导航数据时首页照样 200，只是选中
           # 飞机看不到航路。那要靠 /api/v1/route 手动验。
@@ -121,7 +121,7 @@ metadata:
 spec:
   ingressClassName: cloudflare-tunnel
   rules:
-    - host: radar.airwaysn.org
+    - host: radar.ceruleanavi.net
       http:
         paths:
           - backend:

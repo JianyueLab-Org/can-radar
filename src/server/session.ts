@@ -7,8 +7,8 @@ import { SESSION_COOKIE, apiOrigin } from "./config";
  * 雷达站现在知道你是谁了 —— 但它没有因此长出一套登录。
  *
  * 会话 cookie（`can_session`）是 can-api 签的，Domain 是**父域**
- * `.airwaysn.org`（见 can-api 的 `internal/session/session.go` 和
- * `deploy/k8s.yaml` 里的 `COOKIE_DOMAIN`）。radar.airwaysn.org 是那个域下面的
+ * `.ceruleanavi.net`（见 can-api 的 `internal/session/session.go` 和
+ * `deploy/k8s.yaml` 里的 `COOKIE_DOMAIN`）。radar.ceruleanavi.net 是那个域下面的
  * 一台主机，所以浏览器**本来就**把这枚 cookie 带到这里来了 —— 一直如此，只是
  * 以前没人读。这个文件做的全部事情就是把它读出来，问一次「这是谁」。
  *

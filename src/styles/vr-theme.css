@@ -115,8 +115,8 @@
   --border-strong: var(--vr-stroke-2);
   --ring-brand: rgb(var(--vr-brand-rgb) / 0.32);
 
-  --color-airwaysn: var(--vr-brand);
-  --color-airwaysn-dark: var(--vr-brand-active);
+  --color-can: var(--vr-brand);
+  --color-can-dark: var(--vr-brand-active);
 
   --color-ink: var(--vr-t1);
   --color-muted: var(--vr-t3);
@@ -185,7 +185,7 @@
   --color-info-fg: #92c7ff;
   --color-neutral-fg: var(--vr-t2);
 
-  --color-airwaysn: var(--vr-brand-hover);
+  --color-can: var(--vr-brand-hover);
 }
 
 /* ---------------------------------------------------------------------------

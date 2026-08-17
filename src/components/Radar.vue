@@ -47,7 +47,7 @@ const props = defineProps<{
    * 看这张图的人，没登录时是 null。
    *
    * 服务端渲染时就读好了（见 `src/server/session.ts`），所以第一帧就是对的。
-   * 这个岛屿只用它的 `username` —— 那是 ASN ID，也正是数据源里每架飞机的
+   * 这个岛屿只用它的 `username` —— 那是 CAN ID，也正是数据源里每架飞机的
    * `cid`，「我的飞机」全部依据就是这一个等号。
    */
   member: Member | null;
