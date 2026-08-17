@@ -14,7 +14,7 @@ const trim = (value: string) => value.replace(/\/+$/, "");
 
 /** 数据层。航迹、天气、以及「这枚 cookie 是谁」都问它。 */
 export const apiOrigin = () =>
-  trim(process.env.CAN_API_ORIGIN || "https://api.airwaysn.org");
+  trim(process.env.CAN_API_ORIGIN || "https://api.ceruleanavi.net");
 
 /**
  * 主站。页眉的导航和**唯一的登录入口**都指向它。
@@ -24,7 +24,7 @@ export const apiOrigin = () =>
  * 个值必须可配，否则开发机上的「登录」会把人送到线上去。
  */
 export const webOrigin = () =>
-  trim(process.env.CAN_WEB_ORIGIN || "https://airwaysn.org");
+  trim(process.env.CAN_WEB_ORIGIN || "https://ceruleanavi.net");
 
 /**
  * 这个部署自己的对外地址。

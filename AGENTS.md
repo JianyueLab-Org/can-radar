@@ -32,13 +32,13 @@ bun run build && bun run start
 它之前记得那边也有一份；真正防漂移的是 can-fsd 的 `datafeed_golden.json`。
 
 **4. 页眉链接要走 `site()`。** 这里是另一个源，写 `href="/roster"` 会打在
-radar.airwaysn.org 上然后 404。`siteOrigin` 默认指向主站。
+radar.ceruleanavi.net 上然后 404。`siteOrigin` 默认指向主站。
 
 **5. 这个站点认得出会话，但没有登录。** 两句话都要成立，缺一句就会有人写错东西。
 
 会话 cookie（`can_session`）由 can-api 签发，`COOKIE_DOMAIN` 是**父域**
-`.airwaysn.org` —— 它必须如此，否则 can-web 和 can-dev 也看不见它。
-radar.airwaysn.org 是那个域下面的一台主机，所以那枚 cookie 一直都被浏览器送到
+`.ceruleanavi.net` —— 它必须如此，否则 can-web 和 can-dev 也看不见它。
+radar.ceruleanavi.net 是那个域下面的一台主机，所以那枚 cookie 一直都被浏览器送到
 这里，只是以前没人读。`src/server/session.ts` 把它转发给 can-api 的
 `/api/v1/auth/session` 问一次「这是谁」，就这些。
 

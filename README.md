@@ -8,7 +8,7 @@ can-web 里的时候就不在 `PROTECTED_PREFIXES` 里。
 
 登录着的成员多一件事 —— **雷达认得出哪一架是你的飞机**：地图和名单上给它一个
 记号，可以让画面一直跟着它。这不需要这个站点长出一套登录：网络的会话 cookie
-本来就带到这里来了（can-api 签在父域 `.airwaysn.org` 上），这边只是读一下。
+本来就带到这里来了（can-api 签在父域 `.ceruleanavi.net` 上），这边只是读一下。
 密码表单仍然只在主站有一个，这边也仍然没有数据库口令。见「登录是怎么回事」。
 
 ## 命令
@@ -24,7 +24,7 @@ bun run build && bun run start
 
 | 数据               | 来源                                                                       |
 | ------------------ | -------------------------------------------------------------------------- |
-| 在线飞机与管制席位 | can-fsd 的数据源 `https://data.airwaysn.org/v1/data.json`，浏览器直接读    |
+| 在线飞机与管制席位 | can-fsd 的数据源 `https://data.ceruleanavi.net/v1/data.json`，浏览器直接读 |
 | 已飞航迹           | 本站 `/api/v1/track` —— **一个转发**，真正读 `flightPosition` 的是 can-api |
 | 航路解析           | 本站 `/api/v1/route`，服务端读 `data/navdata`                              |
 
@@ -52,7 +52,7 @@ bun run build && bun run start
   `FlightPlan.vue` 的 `tracked_by` 锁、`PilotsDashboard.vue`、`LiveNetwork.vue`、
   `server/fsd.ts`）。两份会不会漂移，真正的看门人是 can-fsd 的
   `testdata/datafeed_golden.json` 契约测试。
-- 页眉里的导航指回主站（`siteOrigin`，默认 `https://airwaysn.org`）：这里是另
+- 页眉里的导航指回主站（`siteOrigin`，默认 `https://ceruleanavi.net`）：这里是另
   一个源，相对路径会打在雷达自己的域名上然后 404。
 - 会话是**共享的**，见下一节。登录页在主站，这边只读不签。
 
@@ -61,8 +61,8 @@ bun run build && bun run start
 这个站点没有自己的登录：没有密码表单、没有会话格式、没有 `SESSION_SECRET`。
 它做的只是读一枚**本来就送到这里**的 cookie。
 
-can-api 签发会话时把 cookie 的 Domain 设成父域 `.airwaysn.org`（它必须如此，
-否则 can-web 和 can-dev 也看不见它）。radar.airwaysn.org 是那个域下面的一台主
+can-api 签发会话时把 cookie 的 Domain 设成父域 `.ceruleanavi.net`（它必须如此，
+否则 can-web 和 can-dev 也看不见它）。radar.ceruleanavi.net 是那个域下面的一台主
 机，浏览器于是把它一并带过来 —— 服务端渲染时拿它去问一次 can-api 的
 `/api/v1/auth/session`，就知道来的人是谁了。
 
@@ -81,7 +81,7 @@ can-api 签发会话时把 cookie 的 Domain 设成父域 `.airwaysn.org`（它�
 它的服务决定，这边只负责把那个 `Set-Cookie` 原样带回来。
 
 **登录之后多出来的功能只有一个**：认出哪一架飞机是你的。数据源里每架飞机的
-`cid` 就是成员的 ASN ID（`user.username`，can-fsd 登录时就是拿它查的表），所以
+`cid` 就是成员的 CAN ID（`user.username`，can-fsd 登录时就是拿它查的表），所以
 一个字符串比较就够了 —— 一个字节的额外数据都不用要。认出来之后：地图上那架戴
 一个品牌色的圈、名单里那一行有个记号，以及可以让画面一直跟着它（拖动地图就停，
 这个选择记在浏览器里）。
@@ -90,8 +90,8 @@ can-api 签发会话时把 cookie 的 Domain 设成父域 `.airwaysn.org`（它�
 
 | 变量             | 作用                       | 不设的话                        |
 | ---------------- | -------------------------- | ------------------------------- |
-| `CAN_API_ORIGIN` | 航迹、天气、会话都问它     | `https://api.airwaysn.org`      |
-| `CAN_WEB_ORIGIN` | 页眉导航和登录入口指向哪儿 | `https://airwaysn.org`          |
+| `CAN_API_ORIGIN` | 航迹、天气、会话都问它     | `https://api.ceruleanavi.net`   |
+| `CAN_WEB_ORIGIN` | 页眉导航和登录入口指向哪儿 | `https://ceruleanavi.net`       |
 | `PUBLIC_ORIGIN`  | 校验登出请求的 `Origin`    | `http://localhost:4323`（开发） |
 
 `PUBLIC_ORIGIN` 在部署里**必须设**：不设的话它是开发机的地址，浏览器发来的
@@ -99,7 +99,7 @@ can-api 签发会话时把 cookie 的 Domain 设成父域 `.airwaysn.org`（它�
 
 ## 部署
 
-见 [`deploy/k8s.yaml`](deploy/k8s.yaml)（jyl-tyo，`radar.airwaysn.org`）。
+见 [`deploy/k8s.yaml`](deploy/k8s.yaml)（jyl-tyo，`radar.ceruleanavi.net`）。
 `.github/workflows/deploy.yml` 出镜像并滚动 Deployment，走组织里那份可复用工
 作流。上线不再需要手工 `rollout restart` —— 那一步没有部署记录，也没人知道线
 上跑的是哪个 commit。集群的 kubectl 走 Omni 的 OIDC，CI 里非交互地过不去，所

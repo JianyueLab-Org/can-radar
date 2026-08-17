@@ -10,7 +10,7 @@ import { publicOrigin } from "./config";
  *
  * Astro 在 SSR 下默认开着 `checkOrigin`，它从 `Host` 头推出本站的 origin 再和
  * 浏览器发来的 `Origin` 比对。这个站跑在 TLS 终止的反代后面 —— 推出来的是
- * `http://radar.airwaysn.org`，浏览器发的是 `https://…`，**永远对不上，每一个
+ * `http://radar.ceruleanavi.net`，浏览器发的是 `https://…`，**永远对不上，每一个
  * POST 都是 403**。can-web 和 can-dev 因为同一个原因早就关掉了它（can-dev 是
  * 踩了才关的：第一个撞上的正好也是登出）。
  *

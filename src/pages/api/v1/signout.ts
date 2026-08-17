@@ -17,7 +17,7 @@ import { LIMITS, clientIp, enforce } from "@/server/rateLimit";
  * 发它的那个服务**，用的是它自己那份 Domain/Secure/SameSite —— 属性对不上的话
  * 浏览器会把过期的那枚和原来那枚一起留着，人看着退出了其实没有。
  *
- * cookie 的 Domain 是父域 `.airwaysn.org`，而这里是它下面的一台主机，所以由这
+ * cookie 的 Domain 是父域 `.ceruleanavi.net`，而这里是它下面的一台主机，所以由这
  * 个源把它清掉是浏览器允许的：登出在主站、雷达、开发者中心是同一次登出。
  */
 

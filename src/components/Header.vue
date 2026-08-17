@@ -29,7 +29,7 @@ const props = withDefaults(
     /**
      * 主站的地址。
      *
-     * 雷达拆出来之后跑在 radar.airwaysn.org，是一个**独立的源**，而这排导航
+     * 雷达拆出来之后跑在 radar.ceruleanavi.net，是一个**独立的源**，而这排导航
      * 指向的名册、活动、下载、面板全都在主站上。留着相对路径的话，每一个链接
      * 都会打在雷达自己的域名上然后 404。
      */
@@ -39,7 +39,7 @@ const props = withDefaults(
     memberName: "",
     pathname: "",
     locale: "zh-cn",
-    siteOrigin: "https://airwaysn.org",
+    siteOrigin: "https://ceruleanavi.net",
   },
 );
 

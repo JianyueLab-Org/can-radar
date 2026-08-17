@@ -405,7 +405,7 @@ const sections = computed<InfoPopupSection[]>(() => {
           <span class="vr-row_v">{{ pilot.name }}</span>
         </div>
         <div class="vr-row">
-          <span class="vr-row_k">ASN ID</span>
+          <span class="vr-row_k">CAN ID</span>
           <span class="vr-row_v vr-mono">{{ pilot.cid }}</span>
         </div>
         <div class="vr-row">

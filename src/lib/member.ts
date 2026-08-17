@@ -9,7 +9,7 @@ import type { Pilot } from "./radarTypes";
 
 /** can-api 愿意告诉前端的那份成员身份（它的 `memberIdentity`）。 */
 export interface Member {
-  /** ASN ID。 */
+  /** CAN ID。 */
   username: string;
   name: string;
   rating: number;
@@ -23,8 +23,8 @@ export interface Member {
  * 后原样写进数据源的 `cid` 字段；can-api 的会话里那个 `sub` 也是同一列。所以
  * 一个字符串比较就够了，不需要再去问任何人「这架是谁的」。
  *
- * 比较忽略大小写。注册发出来的 ASN ID 是纯数字（can-api 的 `nextASNID`），大
- * 小写无从谈起；但那张表里**还有一批不是 ASN ID 的用户名**（它自己的注释这么
+ * 比较忽略大小写。注册发出来的 CAN ID 是纯数字（can-api 的 `nextASNID`），大
+ * 小写无从谈起；但那张表里**还有一批不是 CAN ID 的用户名**（它自己的注释这么
  * 写的），而那些账号一样能连线。两边同一个字符串、只有大小写不同就认不出自己
  * 的飞机，是一种没人能自己看出原因的失败。
  */

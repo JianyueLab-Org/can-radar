@@ -14,10 +14,10 @@ const radarMessages = getMessages(locale, "radar");
  * 雷达站认得出登录着的人了。
  *
  * 这里以前写着「拿不到主站的会话，只能一律按未登录渲染」，而那句话现在是错
- * 的 —— 它写于 Auth.js 时期，那时的会话 cookie 绑在 airwaysn.org 这台主机上。
+ * 的 —— 它写于 Auth.js 时期，那时的会话 cookie 绑在 ceruleanavi.net 这台主机上。
  * 数据层搬进 can-api 之后，会话由 can-api 签发，Domain 是**父域**
- * `.airwaysn.org`（它必须如此，否则 can-web 和 can-dev 也看不见它）。
- * radar.airwaysn.org 是那个域下面的一台主机，所以那枚 cookie 一直都被浏览器
+ * `.ceruleanavi.net`（它必须如此，否则 can-web 和 can-dev 也看不见它）。
+ * radar.ceruleanavi.net 是那个域下面的一台主机，所以那枚 cookie 一直都被浏览器
  * 送到这里来，只是从来没有人读。
  *
  * 在服务端读（而不是让岛屿去问）是因为 cookie 是 HttpOnly 的，也因为这样首屏
