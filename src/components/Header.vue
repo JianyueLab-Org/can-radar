@@ -15,7 +15,12 @@
  */
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { createTranslator } from "@/lib/i18n";
-import { Icon, ThemeLangControls, useOverlay } from "@jianyuelab-org/can-ui";
+import {
+  Icon,
+  Logo,
+  ThemeLangControls,
+  useOverlay,
+} from "@jianyuelab-org/can-ui";
 
 const props = withDefaults(
   defineProps<{
@@ -151,7 +156,7 @@ onBeforeUnmount(() => {
     <nav class="vh_nav" aria-label="Global">
       <a :href="site('/')" class="vh_logo">
         <span class="sr-only">Cerulean Aviation Network</span>
-        <img alt="" src="/logo-full.png" />
+        <Logo alt="" />
       </a>
 
       <div class="vh_links">
@@ -217,7 +222,7 @@ onBeforeUnmount(() => {
         <div class="vh_mobile_head">
           <a :href="site('/')" class="vh_logo">
             <span class="sr-only">Cerulean Aviation Network</span>
-            <img alt="" src="/logo-full.png" />
+            <Logo alt="" />
           </a>
           <button
             type="button"
