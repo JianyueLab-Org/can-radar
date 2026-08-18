@@ -18,8 +18,11 @@ import { createTranslator } from "@/lib/i18n";
 import {
   Icon,
   Logo,
+  NetworkMenu,
   ThemeLangControls,
+  sectionHeadings,
   useOverlay,
+  visibleSites,
 } from "@jianyuelab-org/can-ui";
 
 const props = withDefaults(
@@ -27,6 +30,13 @@ const props = withDefaults(
     loggedIn: boolean;
     /** 登录着的人的名字，只用来在页眉上显示。空字符串就只显示按钮。 */
     memberName?: string;
+    /**
+     * 会话等级，只喂给「全网」菜单，决定门户那一条露不露。
+     *
+     * 可选，缺了就当作没有 —— `visibleSites` 在这种情况下显示得**更少**而不是更
+     * 多。这一页大多数访客是登出的，所以这是常态而不是异常。
+     */
+    rating?: number;
     messages: Record<string, unknown>;
     /** Current path, used to mark the active nav item. */
     pathname?: string;
@@ -80,13 +90,37 @@ async function signOut() {
 // Escape to close, focus trapped inside, focus returned to the trigger.
 const mobilePanel = useOverlay(mobileMenuOpen);
 
+/**
+ * 这一排是**主站上的页面**，不是站点。
+ *
+ * 「文档」从这里去掉了：会员文档是一个独立的站（docs.ceruleanavi.net），它现在在
+ * 「全网」菜单里，而且是直链。原来这一条写的是 `/docs`，经 `navHref` 拼成主站的
+ * `/docs` —— 那个地址今天只剩一个转发页，于是每次点击都是 301 之后再一次请求。
+ */
 const navigation = computed(() => [
   { name: t("onlineMap"), href: "/" }, // 就是本站
   { name: t("roster"), href: "/roster" },
   { name: t("activities"), href: "/activities" },
   { name: t("downloads"), href: "/downloads" },
-  { name: t("docs"), href: "/docs" },
 ]);
+
+/** 「全网」这个词也来自 can-ui —— 它命名的是网络，不是这个站。 */
+const networkLabel = computed(() => sectionHeadings(props.locale).menuLabel);
+
+/**
+ * 「全网」菜单在手机上没有下拉可用（弹层会被抽屉盖住），所以抽屉里直接把这几条
+ * 铺开。数据是同一份 `visibleSites`，只是换个画法 —— 两处各自维护一张清单，正是
+ * 这次要消掉的东西。
+ */
+const networkSites = computed(() =>
+  visibleSites({
+    locale: props.locale,
+    current: "radar",
+    rating: props.rating,
+    signedIn: props.loggedIn,
+    excludeCurrent: true,
+  }),
+);
 
 function isActive(href: string) {
   if (!props.pathname) return false;
@@ -174,6 +208,15 @@ onBeforeUnmount(() => {
 
       <div class="vh_right">
         <div class="vh_section vh_section--controls">
+          <!-- 这一页在拆分之后曾经是全网跨站链接最少的一个：除了主站，哪儿也去
+               不了。菜单本身来自 can-ui，所以这里不再有第二份「网络上有哪些站」
+               的清单。 -->
+          <NetworkMenu
+            :locale="locale"
+            current="radar"
+            :rating="rating"
+            :signed-in="loggedIn"
+          />
           <ThemeLangControls :locale="locale" />
         </div>
 
@@ -251,6 +294,20 @@ onBeforeUnmount(() => {
           >
             {{ item.name }}
           </a>
+
+          <!-- 全网。桌面上这是一个下拉；在抽屉里铺开，因为一个弹层从抽屉里弹出
+               来只会被抽屉自己盖住。 -->
+          <template v-if="networkSites.length">
+            <div class="vh_mobile_sep">{{ networkLabel }}</div>
+            <a
+              v-for="site in networkSites"
+              :key="site.key"
+              class="vh_mobile_link"
+              :href="site.href"
+            >
+              {{ site.name }}
+            </a>
+          </template>
         </div>
 
         <div class="vh_mobile_cta">
@@ -604,6 +661,16 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   margin-top: 20px;
+}
+
+.vh_mobile_sep {
+  margin: 0.75rem 0 0.25rem;
+  padding: 0 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-faint, #9ca3af);
 }
 
 .vh_mobile_link {
