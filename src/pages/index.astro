@@ -46,6 +46,7 @@ if (member) {
     <Header
       loggedIn={!!member}
       memberName={member?.name ?? ""}
+      rating={member?.rating}
       messages={headerMessages}
       pathname={Astro.url.pathname}
       locale={locale}
