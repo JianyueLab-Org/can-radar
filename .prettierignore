@@ -11,4 +11,5 @@ bun.lock
 # 写上是因为「哪天它认识了」比「哪天有人纳闷 CI 为什么突然红了」便宜。
 public/airports.json
 public/boundaries.geojson
+public/firs.json
 public/tracon.geojson

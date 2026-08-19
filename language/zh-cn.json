@@ -50,6 +50,7 @@
       "heading": "航向",
       "squawk": "应答机",
       "rules": "飞行规则",
+      "airspace": "管制区",
       "frequency": "频率",
       "rating": "等级",
       "flightPlan": "飞行计划",

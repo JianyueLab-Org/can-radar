@@ -29,6 +29,7 @@ import L from "leaflet";
  * 我们说了算。 */
 import { airportAt, loadAirports } from "@/lib/airports";
 import { getFacilityName } from "@/lib/facilities";
+import { firMatch, loadFirs, prefersOceanic } from "@/lib/firs";
 import {
   AREA_COLORS,
   ROUTE_COLORS,
@@ -172,6 +173,9 @@ let trackKey: string | null = null;
 
 /** Boundary polygons, built once from the GeoJSON and restyled thereafter. */
 const boundaryShapes = new Map<string, L.GeoJSON[]>();
+/** VATSpy 的边界 id → 它在 `boundaryShapes` 里占的那些键。一个 id 底下同时有
+ *  陆地和公海两块时是两个键，见 `boundaryKey`。 */
+const boundaryKeysById = new Map<string, string[]>();
 let boundaryControllers = new Map<string, Controller[]>();
 let activeBoundaries = new Set<string>();
 
@@ -181,147 +185,51 @@ const pilotKey = (p: Pilot) => `pilot:${p.cid || p.callsign}`;
 const atcKey = (c: Controller) => `atc:${c.callsign}`;
 
 /* ------------------------------------------------------------------ *
- * Controller ↔ boundary matching (unchanged behaviour, kept verbatim)
+ * Controller ↔ boundary matching — see `@/lib/firs`
  * ------------------------------------------------------------------ */
 
 /**
- * Every boundary id the loaded GeoJSON actually carries, lowercased.
+ * 一个席位该点亮 `boundaryShapes` 里的哪几个键。
  *
- * A split sector is only a split sector if VATSpy draws one — see `sectorOf`.
+ * 判据整个在 `@/lib/firs` 里（VATSpy 的呼号前缀表，最长前缀赢）；这里只做一件
+ * 那边做不了的事：把边界 **id** 落到本地的**键**上。一个 id 底下可能挂着两个要
+ * 素（陆地一块、公海一块），它们在 `boundaryShapes` 里是两个键，见 `boundaryKey`。
+ *
+ * 表还没取回来时返回空 —— 地图照常画，边界等 `loadFirs()` 落地后那一次
+ * `syncBoundaries()` 再上色。
  */
-const knownBoundaryIds = new Set<string>();
+function boundaryKeysFor(callsign: string): string[] {
+  const match = firMatch(callsign);
+  if (!match) return [];
+
+  const oceanic = prefersOceanic(callsign);
+  const keys: string[] = [];
+
+  for (const id of match.boundaries) {
+    const candidates = boundaryKeysById.get(id);
+    if (!candidates?.length) continue;
+    // 挑不到就用第一个：绝大多数 id 只有一个要素，海陆之分根本不适用。
+    const picked =
+      candidates.find((key) => isOceanicKey(key) === oceanic) ?? candidates[0];
+    if (!keys.includes(picked)) keys.push(picked);
+  }
+
+  return keys;
+}
 
 /**
- * The boundary id a split-sector callsign names, or "" if it names none.
+ * CTR/FSS positions own an area rather than a point on the map.
  *
- * `RJDG_S_CTR` → `rjdg-s`. Only the middle segment of a three-part callsign is
- * read this way, and only when it is short: `ZSSS_APP` has no middle segment,
- * and `RJTG_OCEANIC_CTR` names a job rather than a sector.
- *
- * The reading also has to be confirmed against the data. `HKG_W_CTR` has the
- * shape of a split sector but there is no `HKG-W` polygon — Hong Kong is one
- * undivided `VHHK`, reached through the short-code mapping further down. Left
- * unchecked, the sector rule claimed that callsign and then matched nothing,
- * so working the west sector drew no airspace at all.
+ * FSS 以前只认 `PRC_FSS` 一个呼号，因为那时候没有对照表，别的 FSS 呼号匹配不出
+ * 任何边界 —— 把它们算成「拥有空域」的结果是既没有多边形也没有机场标牌，人整个
+ * 消失。现在 `[UIRs]` 在表里（`ASEA_FSS` 是东南亚那一串），这条限制没有必要了：
+ * 匹配不到的席位由 `boundaryKeysFor` 返回空，本来就不会画错东西。
  */
-function sectorOf(callsign: string): string {
-  const parts = callsign.split("_");
-  if (parts.length !== 3) return "";
-
-  const [fir, sector] = parts;
-  if (!fir || sector.length > 2 || !/^[a-z0-9]+$/.test(sector)) return "";
-  if (sector === "o") return ""; // oceanic, handled separately
-
-  const id = `${fir}-${sector}`;
-  return knownBoundaryIds.has(id) ? id : "";
-}
-
-function matchControllerToBoundary(
-  controllerCallsign: string,
-  boundaryId: string,
-): boolean {
-  const shortCodeToIcaoMapping: { [key: string]: string } = {
-    lax: "kzla",
-    hkg: "vhhk",
-    tpe: "rcaa",
-  };
-
-  const prcFssAreas = [
-    "zysh",
-    "zbpe",
-    "zsha",
-    "zhwh",
-    "zgzu",
-    "zpkm",
-    "zlhw",
-    "zwuq",
-    "zjsa",
-  ];
-
-  if (!controllerCallsign || !boundaryId) return false;
-
-  const controller = controllerCallsign.toLowerCase();
-  const boundary = boundaryId.toLowerCase();
-
-  if (controller === boundary) return true;
-
-  // Split sectors are decided before anything else, because the generic rules
-  // below cannot tell them apart from their parent.
-  //
-  // VATSpy spells a sector as `RJDG-S`, and a controller spells the same thing
-  // as `RJDG_S_CTR`. On the old rules that callsign matched the *parent* FIR
-  // (`RJDG` is a prefix of `rjdg_s_ctr`), so working Okinawa lit the whole of
-  // Japan and hung the label over Osaka — while `RJDG-S`, the polygon that was
-  // actually wanted, matched nothing at all.
-  const sector = sectorOf(controller);
-  if (sector) return boundary === sector;
-
-  // A controller without a sector suffix works the whole FIR, so they take the
-  // parent polygon and none of its subdivisions.
-  if (boundary.includes("-")) {
-    const parent = boundary.slice(0, boundary.indexOf("-"));
-    if (controller.startsWith(parent + "_") || controller === parent)
-      return false;
-  }
-
-  if (
-    controller.startsWith(boundary + "_") ||
-    boundary.startsWith(controller + "_")
-  )
-    return true;
-
-  if (controller === "prc_fss") {
-    const boundaryCode = boundary.substring(0, 4).toLowerCase();
-    return prcFssAreas.includes(boundaryCode);
-  }
-
-  const controllerParts = controller.split("_");
-  const boundaryParts = boundary.split("_");
-
-  if (controllerParts.length >= 2 && boundaryParts.length >= 1) {
-    const mappedIcao = shortCodeToIcaoMapping[controllerParts[0]];
-    if (mappedIcao && boundaryParts[0].startsWith(mappedIcao)) {
-      if (controllerParts.length >= 3 && boundaryParts.length >= 2) {
-        return (
-          controllerParts[controllerParts.length - 1] ===
-          boundaryParts[boundaryParts.length - 1]
-        );
-      }
-      return true;
-    }
-  }
-
-  if (boundaryParts.length >= 2 && controllerParts.length >= 1) {
-    const mappedIcao = shortCodeToIcaoMapping[boundaryParts[0]];
-    if (mappedIcao && controllerParts[0].startsWith(mappedIcao)) {
-      if (controllerParts.length >= 2 && boundaryParts.length >= 3) {
-        return (
-          controllerParts[controllerParts.length - 1] ===
-          boundaryParts[boundaryParts.length - 1]
-        );
-      }
-      return true;
-    }
-  }
-
-  for (const controllerPart of controllerParts) {
-    for (const boundaryPart of boundaryParts) {
-      if (controllerPart === boundaryPart && controllerPart.length >= 3) {
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
-
-/** CTR/FSS positions own an area rather than a point on the map. */
 function ownsAirspace(controller: Controller): boolean {
   return (
     controller.facility === 6 ||
     controller.facility === 7 ||
-    (controller.facility === 1 &&
-      controller.callsign.toLowerCase() === "prc_fss")
+    controller.facility === 1
   );
 }
 
@@ -1028,11 +936,14 @@ const QUIET_BOUNDARY_MIN_ZOOM = 5;
 /**
  * Oceanic airspace is kept apart from the FIR it shares an id with.
  *
- * VATSpy ships Tokyo Control as two features under the one id `RJTG`: the
- * airspace over Japan, and a piece of the Pacific several times its size. Keyed
- * together, one `RJTG_CTR` lit both, and the map claimed a controller was
- * working half an ocean. They are keyed apart here and matched separately —
- * an oceanic sector lights only for a callsign that says it is oceanic.
+ * VATSpy 偶尔把一块陆地和一块公海挂在同一个 id 底下 —— 现在是 `KZNY`（纽约）和
+ * `SUEO`（蒙得维的亚），公海那块往往比陆地大好几倍。合成一个键的话，一个
+ * `NY_CTR` 会同时点亮两块，地图上就成了「这个人管着半个大西洋」。这里把它们分
+ * 成两个键，由 `boundaryKeysFor` 挑一个（判据见 `lib/firs` 的 `prefersOceanic`）。
+ *
+ * 东京以前也是这样一个 id 两块地；上游已经把东京海洋区拆成独立的 `RJJJ`，所以
+ * 今天这条只剩两个 id 用得上 —— 留着是因为上游随时可能再合并回去，而合并回去的
+ * 表现是一整片公海无声地亮起来。
  */
 const OCEANIC_SUFFIX = "#oceanic";
 
@@ -1040,34 +951,20 @@ function boundaryKey(id: string, oceanic: boolean): string {
   return oceanic ? `${id}${OCEANIC_SUFFIX}` : id;
 }
 
-function boundaryBaseId(key: string): string {
-  return key.endsWith(OCEANIC_SUFFIX)
-    ? key.slice(0, -OCEANIC_SUFFIX.length)
-    : key;
-}
-
 function isOceanicKey(key: string): boolean {
   return key.endsWith(OCEANIC_SUFFIX);
-}
-
-/** `RJTG_O_CTR` and `RJTG_OCEANIC_CTR` work the ocean; `RJTG_CTR` does not. */
-function worksOceanic(callsign: string): boolean {
-  return callsign
-    .toUpperCase()
-    .split("_")
-    .some((part) => part === "O" || part === "OCN" || part === "OCEANIC");
 }
 
 /**
  * 空闲时不画的那些边界 —— 被拆开的扇区。
  *
- * `boundaries.geojson` 里 768 个要素中有 343 个是扇区划分（`ADR-E`、`BIRD-N`
- * 这样），它们**画在自己所属 FIR 的多边形之上**。全部铺开的结果是每个被拆过的
- * FIR 都有一圈外框加两到五条内部分割线，叠成一张网 —— 这就是那片杂乱。
+ * `boundaries.geojson` 里 1102 个要素中有 633 个是扇区划分（`ADR-E`、
+ * `RJDG-F01` 这样），它们**画在自己所属 FIR 的多边形之上**。全部铺开的结果是每
+ * 个被拆过的 FIR 都有一圈外框加几条内部分割线，叠成一张网 —— 这就是那片杂乱。
  *
- * 判据是「父 FIR 也在这份数据里」，不是「id 里有连字符」。有 22 个子扇区找不到
- * 父要素（`TEH-*`、`LGMD-*`，以及**这张网络自己的 `ZJSY-*` 三亚**），按连字符
- * 一刀切会让那几块空域整个消失。
+ * 判据是「父 FIR 也在这份数据里」，不是「id 里有连字符」。有 32 个子扇区找不到
+ * 父要素（`TEH-*`、`LGMD-*`，以及**这张网络自己的 `ZJSY-*` 三亚**，它的父要素
+ * 叫 `ZJSA`），按连字符一刀切会让那几块空域整个消失。
  *
  * 只影响**空闲**图层：一旦有人上了某个扇区，syncBoundaries 会把它挪进
  * boundariesLayer 照常高亮 —— 「这块被拆开的空域现在有人管」恰恰是必须画出来的
@@ -1094,10 +991,12 @@ function buildBoundaries(data: GeoJSON.FeatureCollection) {
       feature.properties?.name;
     if (!boundaryId) continue;
 
-    knownBoundaryIds.add(String(boundaryId).toLowerCase());
-
     const raw = String(boundaryId);
     const key = boundaryKey(raw, String(feature.properties?.oceanic) === "1");
+
+    const keys = boundaryKeysById.get(raw);
+    if (!keys) boundaryKeysById.set(raw, [key]);
+    else if (!keys.includes(key)) keys.push(key);
 
     const parent = raw.includes("-") ? raw.slice(0, raw.indexOf("-")) : null;
     if (parent && rawIds.has(parent)) idleHiddenBoundaries.add(key);
@@ -1172,18 +1071,8 @@ function syncBoundaries() {
 
   for (const controller of props.controllers) {
     if (!ownsAirspace(controller)) continue;
-    const oceanic = worksOceanic(controller.callsign);
 
-    for (const boundaryId of boundaryShapes.keys()) {
-      // The ocean is a separate job from the FIR that shares its id.
-      if (isOceanicKey(boundaryId) !== oceanic) continue;
-      if (
-        !matchControllerToBoundary(
-          controller.callsign,
-          boundaryBaseId(boundaryId),
-        )
-      )
-        continue;
+    for (const boundaryId of boundaryKeysFor(controller.callsign)) {
       nextActive.add(boundaryId);
       const list = nextControllers.get(boundaryId) ?? [];
       list.push(controller);
@@ -1799,20 +1688,16 @@ function focus(key: string) {
     return;
   }
 
-  // A CTR/FSS position is its airspace — frame the whole thing.
-  const oceanic = worksOceanic(controller.callsign);
-  for (const [boundaryId, shapes] of boundaryShapes) {
-    if (isOceanicKey(boundaryId) !== oceanic) continue;
-    if (
-      !matchControllerToBoundary(
-        controller.callsign,
-        boundaryBaseId(boundaryId),
-      )
-    )
-      continue;
-    map.fitBounds(shapes[0].getBounds(), { padding: [40, 40], maxZoom: 7 });
-    return;
+  // A CTR/FSS position is its airspace — frame the whole thing. A UIR covers
+  // several FIRs, so the frame is every piece of it rather than the first.
+  const bounds = L.latLngBounds([]);
+  for (const boundaryId of boundaryKeysFor(controller.callsign)) {
+    for (const shape of boundaryShapes.get(boundaryId) ?? []) {
+      bounds.extend(shape.getBounds());
+    }
   }
+  if (bounds.isValid())
+    map.fitBounds(bounds, { padding: [40, 40], maxZoom: 7 });
 }
 
 /**
@@ -2089,7 +1974,13 @@ onMounted(async () => {
   fitToTraffic();
 
   try {
-    const response = await fetch("/boundaries.geojson");
+    // 两份一起取：多边形，和「哪个呼号管哪块多边形」的对照表（见 lib/firs）。
+    // 对照表取不到时高亮就是空的，所以两者一起等，别让第一次 syncBoundaries
+    // 跑在表到齐之前 —— 那一次会把所有边界都判成没人管。
+    const [response] = await Promise.all([
+      fetch("/boundaries.geojson"),
+      loadFirs(),
+    ]);
     buildBoundaries(await response.json());
     applyBoundaryFilter();
     syncBoundaries();

@@ -50,6 +50,7 @@
       "heading": "航向",
       "squawk": "回應機",
       "rules": "飛行規則",
+      "airspace": "管制區",
       "frequency": "頻率",
       "rating": "等級",
       "flightPlan": "飛行計畫",
