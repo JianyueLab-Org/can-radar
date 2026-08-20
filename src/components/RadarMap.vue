@@ -1865,6 +1865,10 @@ function fitToTraffic(force = false) {
     }
   }
   for (const marker of atcMarkers.values()) points.push(marker.getLatLng());
+  // 区调的标牌在 `sectorMarkers` 里，不在 `atcMarkers` 里 —— 漏掉它的表现是：网
+  // 络上只有一个区调、一架飞机都没有时，可取的点是空的，于是退回默认的中国视
+  // 角。那个人明明画出来了，只是在屏幕外，看上去像根本没上线。
+  for (const marker of sectorMarkers.values()) points.push(marker.getLatLng());
   if (!points.length) return;
 
   try {
@@ -1991,6 +1995,9 @@ onMounted(async () => {
     applyBoundaryFilter();
     syncBoundaries();
     syncStations();
+    // 再试一次初始定位：区调的标牌到这一步才存在，而上面那次（挂载时）看不到它
+    // 们。已经定过位的话 `didInitialFit` 会挡住，不会把画面抢回去。
+    fitToTraffic();
   } catch (error) {
     console.error("Failed to load boundaries data:", error);
   }
