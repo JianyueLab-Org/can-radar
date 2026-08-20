@@ -9,6 +9,8 @@
  * 是公开的（EuroScope 的 ATIS maker 就在用），所以这张不需要登录的页面调得动。
  */
 
+import { fieldCandidates } from "@/lib/airportCodes";
+import { ownsAirspace } from "@/lib/facilities";
 import type { AtisData, Controller, Pilot } from "@/lib/radarTypes";
 
 /** 一架和这个机场有关的飞机，以及它是来还是走。 */
@@ -30,14 +32,16 @@ export interface AirportSnapshot {
 const GROUND_SPEED_MAX = 30;
 
 /**
- * 席位属于哪个机场，从呼号的第一段读。
+ * 这个席位算不算在这个机场上。
  *
- * `ZSPD_TWR` → `ZSPD`，`ZSPD_A_ATIS` → `ZSPD`。区调（`ZSHA_CTR`）读出来的是
- * FIR 代码而不是机场，但那正好 —— 它不会等于任何一个机场的 ICAO，于是自然不会
- * 出现在机场面板里，不需要额外排除。
+ * 判据本来是「呼号第一段等于这张卡的 ICAO」—— `ZSPD_TWR` → `ZSPD`，而区调
+ * （`ZSHA_CTR`）读出来是 FIR 代码，不等于任何机场 ICAO，于是自然落选，不需要额
+ * 外排除。北美不成立：报的是三字代码，`MEM_TWR` 的第一段是 `MEM` 而这张卡的标
+ * 题是 `KMEM`（地图上的标牌已经解析过了，见 `lib/airportCodes`）。两种写法都
+ * 认，因为卡片可能从解析过的标牌点开，也可能来自一个认不出的前缀。
  */
-export function stationAirportCode(callsign: string): string {
-  return (callsign.split("_")[0] ?? "").toUpperCase();
+function stationBelongsTo(callsign: string, icao: string): boolean {
+  return fieldCandidates(callsign).includes(icao);
 }
 
 /**
@@ -84,9 +88,12 @@ export function airportSnapshot(
       a.pilot.callsign.localeCompare(b.pilot.callsign),
   );
 
-  const stations = [...controllers, ...atis].filter(
-    (station) => stationAirportCode(station.callsign) === code,
-  );
+  // 区调和情报服务不算「在这个机场」，哪怕呼号前缀解析得出这个场 —— 见
+  // `ownsAirspace`。通播不过这道筛子，它本来就是机场的一部分。
+  const stations = [
+    ...controllers.filter((c) => !ownsAirspace(c.facility)),
+    ...atis,
+  ].filter((station) => stationBelongsTo(station.callsign, code));
 
   return { icao: code, departures, arrivals, stations };
 }

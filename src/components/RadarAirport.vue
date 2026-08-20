@@ -12,6 +12,7 @@
  */
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 
+import { loadAirportCodes } from "@/lib/airportCodes";
 import { airportSnapshot, fetchMetar } from "@/lib/airportView";
 import { getFacilityName } from "@/lib/facilities";
 import { createTranslator } from "@/lib/i18n";
@@ -37,10 +38,29 @@ const emit = defineEmits<{
 
 const t = createTranslator(props.messages);
 
-const snapshot = computed(() =>
-  props.icao
+/**
+ * 三字代码对照表到位了没有 —— 见 `lib/airportCodes`。
+ *
+ * 地图那边挂载时就取了同一份（模块级的单例），所以这里几乎总是已经好了。留一个
+ * ref 是因为 `airportSnapshot` 认席位要用它，而这张卡不该假定另一个岛屿先跑过：
+ * 表不在时北美机场的「在场席位」会漏，那是一种安静的错。
+ */
+const codesVersion = ref<string | null>(null);
+
+const snapshot = computed(() => {
+  void codesVersion.value;
+  return props.icao
     ? airportSnapshot(props.icao, props.pilots, props.controllers, props.atis)
-    : null,
+    : null;
+});
+
+watch(
+  () => props.icao,
+  async (icao) => {
+    if (!icao || codesVersion.value) return;
+    codesVersion.value = (await loadAirportCodes())?.version ?? null;
+  },
+  { immediate: true },
 );
 
 const metar = ref<string | null>(null);

@@ -65,8 +65,11 @@ for (const feature of JSON.parse(geojson).features) {
   if (id) drawn.add(String(id));
 }
 
-/** `[FIRs]` is `ICAO|Name|Callsign prefix|Boundary`; `[UIRs]` is `ICAO|Name|FIRs`. */
-const rows = { FIRs: [], UIRs: [] };
+/**
+ * `[FIRs]` is `ICAO|Name|Callsign prefix|Boundary`; `[UIRs]` is `ICAO|Name|FIRs`;
+ * `[Airports]` is `ICAO|Name|Lat|Lon|IATA/LID|FIR|IsPseudo`.
+ */
+const rows = { FIRs: [], UIRs: [], Airports: [] };
 let section = "";
 for (const line of dat.split(/\r?\n/)) {
   if (line.startsWith("[")) {
@@ -121,13 +124,51 @@ for (const [icao, name, members] of rows.UIRs) {
   uirs.push({ prefix: icao, name, boundaries });
 }
 
-const json = JSON.stringify({ version: commit, firs, uirs });
+/**
+ * 三字代码 → ICAO。
+ *
+ * 北美的本场席位报的是机场的三字代码而不是 ICAO（`MEM_TWR`、`ATL_GND`），而这
+ * 张图别处认的全是 ICAO —— 飞行计划里写 `KMEM`、`airports.json` 按 ICAO 索引、
+ * METAR 也按 ICAO 查。少了这张表，北美的机场卡就是空的：席位列得出来，进离场、
+ * 天气和坐标一个都对不上。
+ *
+ * **分真假两张。** VATSpy 把同一个机场的备用写法放在 `IsPseudo=1` 的行上，多伦
+ * 多就是两行：真的那行写 `TOR`，`YYZ` 在假的那行。而假行里还混着**进近的代
+ * 码** —— `KLAX|SOCAL Combined|…|SCT|…|1`、`KSFO|NORCAL Combined|…|NCT|…|1`。
+ * 塔台/地面认得出 `YYZ` 是好事，进近却不能把 `SCT_APP` 说成「洛杉矶机场」：南加
+ * 进近管的是一整片，不是那一个场。所以本场席位两张表都查，进近只查真的那张。
+ */
+const everyIcao = new Set(rows.Airports.map(([icao]) => icao).filter(Boolean));
+const airportsReal = {};
+const airportsPseudo = {};
+for (const [icao, , , , code, , isPseudo] of rows.Airports) {
+  if (!icao || !code || code === icao) continue;
+  // 本身就是某个机场 ICAO 的代码不进表（`LEVS` 既是 LECU 的 LID，又是同一个场
+  // 的另一个 ICAO 写法）。查表的一方无从判断手里那串是哪一种，与其在运行时猜，
+  // 不如让这种代码原样通过 —— 它本来就已经是 ICAO 了。
+  if (everyIcao.has(code)) continue;
+  const table = isPseudo === "1" ? airportsPseudo : airportsReal;
+  table[code] ??= icao;
+}
+// 真行赢：同一个代码两边都有时，假的那份不必再存一遍。
+for (const code of Object.keys(airportsReal)) delete airportsPseudo[code];
+
+const firsJson = JSON.stringify({ version: commit, firs, uirs });
+const codesJson = JSON.stringify({
+  version: commit,
+  real: airportsReal,
+  pseudo: airportsPseudo,
+});
 writeFileSync(join(root, "public", "boundaries.geojson"), geojson);
-writeFileSync(join(root, "public", "firs.json"), json);
+writeFileSync(join(root, "public", "firs.json"), firsJson);
+writeFileSync(join(root, "public", "airport-codes.json"), codesJson);
 
 console.log(
   `boundaries.geojson: ${drawn.size} ids, ${(geojson.length / 1024).toFixed(0)} KB\n` +
     `firs.json: ${firs.length} prefixes, ${uirs.length} UIRs, ` +
     `${orphans} FIR rows dropped for having no polygon, ` +
-    `${(json.length / 1024).toFixed(0)} KB`,
+    `${(firsJson.length / 1024).toFixed(0)} KB\n` +
+    `airport-codes.json: ${Object.keys(airportsReal).length} real, ` +
+    `${Object.keys(airportsPseudo).length} pseudo, ` +
+    `${(codesJson.length / 1024).toFixed(0)} KB`,
 );

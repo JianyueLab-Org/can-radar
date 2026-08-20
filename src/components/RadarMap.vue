@@ -28,7 +28,8 @@ import L from "leaflet";
  * 版权条上留着一串默认的亮蓝色链接和一块白底比例尺。改成在布局里引，顺序就由
  * 我们说了算。 */
 import { airportAt, loadAirports } from "@/lib/airports";
-import { getFacilityName } from "@/lib/facilities";
+import { loadAirportCodes, stationField } from "@/lib/airportCodes";
+import { getFacilityName, ownsAirspace } from "@/lib/facilities";
 import { firMatch, loadFirs, prefersOceanic } from "@/lib/firs";
 import {
   AREA_COLORS,
@@ -42,7 +43,6 @@ import {
   flightLevel,
   greatCircle,
   isOnGround,
-  stationAirport,
   type LatLon,
 } from "@/lib/radar";
 import type { Controller, Pilot, AtisData } from "@/lib/radarTypes";
@@ -220,17 +220,15 @@ function boundaryKeysFor(callsign: string): string[] {
 /**
  * CTR/FSS positions own an area rather than a point on the map.
  *
+ * 判据在 `lib/facilities`，因为机场卡也要同一条 —— 理由写在那儿。
+ *
  * FSS 以前只认 `PRC_FSS` 一个呼号，因为那时候没有对照表，别的 FSS 呼号匹配不出
  * 任何边界 —— 把它们算成「拥有空域」的结果是既没有多边形也没有机场标牌，人整个
  * 消失。现在 `[UIRs]` 在表里（`ASEA_FSS` 是东南亚那一串），这条限制没有必要了：
  * 匹配不到的席位由 `boundaryKeysFor` 返回空，本来就不会画错东西。
  */
-function ownsAirspace(controller: Controller): boolean {
-  return (
-    controller.facility === 6 ||
-    controller.facility === 7 ||
-    controller.facility === 1
-  );
+function ownsAirspaceStation(controller: Controller): boolean {
+  return ownsAirspace(controller.facility);
 }
 
 /* ------------------------------------------------------------------ *
@@ -511,15 +509,20 @@ function isLocalPosition(facility: number, isAtis: boolean): boolean {
   return isAtis || LOCAL_FACILITIES.has(facility);
 }
 
-/** Which tag a position belongs to. */
+/**
+ * Which tag a position belongs to.
+ *
+ * 分组用的是**解析过的 ICAO** 而不是呼号第一段：北美的本场席位报三字代码
+ * （`MEM_TWR`），而标牌上那个代码同时是「点它打开机场卡」的键，卡里的进离场、
+ * 天气和坐标全按 ICAO 查。见 `lib/airportCodes`。
+ */
 function stationGroupKey(
   callsign: string,
   facility: number,
   isAtis: boolean,
 ): string {
-  return isLocalPosition(facility, isAtis)
-    ? stationAirport(callsign)
-    : `pos:${callsign}`;
+  const local = isLocalPosition(facility, isAtis);
+  return local ? stationField(callsign, true) : `pos:${callsign}`;
 }
 
 function groupStations(): Map<string, StationGroup> {
@@ -533,15 +536,16 @@ function groupStations(): Map<string, StationGroup> {
     // An ATIS is identified by the array it arrived in: the feed's `facility`
     // for an ATIS connection is not reliably 7.
     const facility = isAtis ? 7 : station.facility;
+    const local = isLocalPosition(facility, isAtis);
     const id = stationGroupKey(station.callsign, facility, isAtis);
     // An approach whose airspace is drawn is labelled on that airspace's
     // boundary instead of at the airport it reports from.
     const anchor = traconLabelPoints.get(atcKey(station));
     const group = groups.get(id) ?? {
-      code: stationAirport(station.callsign),
+      code: stationField(station.callsign, local),
       lat: anchor?.[0] ?? lat,
       lon: anchor?.[1] ?? lon,
-      local: isLocalPosition(facility, isAtis),
+      local,
       stack: 0,
       stations: [],
     };
@@ -550,7 +554,7 @@ function groupStations(): Map<string, StationGroup> {
   };
 
   for (const controller of props.controllers) {
-    if (ownsAirspace(controller)) continue;
+    if (ownsAirspaceStation(controller)) continue;
     add(controller, false);
   }
   for (const station of props.atis) add(station, true);
@@ -1070,7 +1074,7 @@ function syncBoundaries() {
   const nextControllers = new Map<string, Controller[]>();
 
   for (const controller of props.controllers) {
-    if (!ownsAirspace(controller)) continue;
+    if (!ownsAirspaceStation(controller)) continue;
 
     for (const boundaryId of boundaryKeysFor(controller.callsign)) {
       nextActive.add(boundaryId);
@@ -1974,16 +1978,19 @@ onMounted(async () => {
   fitToTraffic();
 
   try {
-    // 两份一起取：多边形，和「哪个呼号管哪块多边形」的对照表（见 lib/firs）。
-    // 对照表取不到时高亮就是空的，所以两者一起等，别让第一次 syncBoundaries
-    // 跑在表到齐之前 —— 那一次会把所有边界都判成没人管。
+    // 三份一起取：多边形、「哪个呼号管哪块多边形」（lib/firs），以及「三字代码
+    // 是哪个机场」（lib/airportCodes）。前两者一起等是因为第一次 syncBoundaries
+    // 跑在表到齐之前会把所有边界都判成没人管；第三份到位之后要重跑一次
+    // syncStations，否则北美的标牌会停在 `MEM` 而不是 `KMEM`。
     const [response] = await Promise.all([
       fetch("/boundaries.geojson"),
       loadFirs(),
+      loadAirportCodes(),
     ]);
     buildBoundaries(await response.json());
     applyBoundaryFilter();
     syncBoundaries();
+    syncStations();
   } catch (error) {
     console.error("Failed to load boundaries data:", error);
   }

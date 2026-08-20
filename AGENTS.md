@@ -105,13 +105,13 @@ Mono，以及**浮在整屏地图上的一摞卡片**取代原来的三栏。
 `PopupOverlay`），`VrButton` / `VrTabs` / `VrBlockTitle` / `VrBubble` 是它周围
 的零件。新面板套 `VrInfoPopup` 并用 `sections` 声明分段，别自己拼一遍卡片外壳。
 
-## public/ 里那四个数据文件
+## public/ 里那五个数据文件
 
 `airports.json`（VATSpy，机场坐标）、`boundaries.geojson`（VATSpy，FIR 多边形）、
-`firs.json`（VATSpy，呼号前缀 → 边界 id）、`tracon.geojson`（SimAware，进近空域）。
-两个数据源都在版权条里署了名，都是 **CC BY-SA 4.0** —— 可以随仓库分发，这也是
-它们和 `data/navdata/` 的根本区别：navdata 是商业 AIRAC 派生物，永远不进这个公开
-仓库。
+`firs.json`（VATSpy，呼号前缀 → 边界 id）、`airport-codes.json`（VATSpy，三字代码
+→ ICAO）、`tracon.geojson`（SimAware，进近空域）。两个数据源都在版权条里署了名，
+都是 **CC BY-SA 4.0** —— 可以随仓库分发，这也是它们和 `data/navdata/` 的根本区
+别：navdata 是商业 AIRAC 派生物，永远不进这个公开仓库。
 
 **其中两个是补回来的。** 从 can-web 拆出来时只带走了 `tracon.geojson`，另外两个
 留在了原地，于是这个站从拆分那天起：航路线画不出来（`loadAirports()` 404 之后
@@ -120,9 +120,9 @@ Mono，以及**浮在整屏地图上的一摞卡片**取代原来的三栏。
 而版权条一直在署名它并没有装的那批数据。Dockerfile 是 `COPY . .`，k8s 只挂
 navdata 的卷，所以没有任何运行时通路能补上它们：文件不在仓库里就是不在。
 
-**`boundaries.geojson` 和 `firs.json` 必须出自同一个上游 commit**，所以它们由
-**这个仓库的** `scripts/build-vatspy.mjs` 一起生成（commit 写死在脚本里，改了要
-把两个文件一起提交）：
+**`boundaries.geojson`、`firs.json` 和 `airport-codes.json` 必须出自同一个上游
+commit**，所以它们由**这个仓库的** `scripts/build-vatspy.mjs` 一起生成（commit
+写死在脚本里，改了要把三个文件一起提交）：
 
 ```bash
 node scripts/build-vatspy.mjs [commit-ish]
@@ -162,6 +162,28 @@ node scripts/build-vatspy.mjs [commit-ish]
 `ZBAA-SW`，`ZBAA-C` 这个多边形已经不存在了，而扇区包里还有这个席位。退回父 FIR
 是这种情况下唯一能做对的事。`RJCG_*`（札幌）则是 VATSpy 根本没有的 FIR，匹配不
 到任何东西 —— 它在右边的席位列表里照样出现，只是地图上没有它的空域。
+
+## 北美的本场席位报的是三字代码
+
+`MEM_TWR` 而不是 `KMEM_TWR`。而这张图别处认的全是 ICAO —— 飞行计划里写 `KMEM`，
+`airports.json` 按 ICAO 索引坐标，METAR 也按 ICAO 查。所以在补上
+`airport-codes.json`（VATSpy.dat 的 `[Airports]`，`IATA/LID` 那一列）之前，**北
+美每一个机场卡都是空的**：席位那一栏列得出来（它和标牌用的是同一个前缀），进离
+场、天气、坐标全部对不上，而三者都是「查不到就安静地不显示」，看上去像那个机场
+此刻没有航班。解析在 `src/lib/airportCodes.ts`，判据照 vatsim-radar 的
+`realIata` / `iata` 两层。
+
+- **本场席位（放行/地面/塔台/通播）两张表都查，进近只查真的那张。** VATSpy 把机
+  场的备用写法放在 `IsPseudo=1` 的行上（多伦多的 `YYZ` 就在那儿），但同一批假行
+  里还混着进近的代码 —— `SCT` 挂在 KLAX 上、`NCT` 挂在 KSFO 上。塔台认得出 `YYZ`
+  是好事，把南加进近的标牌写成「KLAX」不是：它管的是一整片终端区，不是那一个场。
+- **本身就是某个机场 ICAO 的代码不进表**（`LEVS` 既是 LECU 的 LID，又是同一个场
+  的另一个 ICAO 写法）。查表的一方分不清手里那串是哪一种，让它原样通过就对了。
+- **`ownsAirspace` 现在是共享的**（`lib/facilities.ts`）。机场卡以前靠「呼号第一
+  段等于机场 ICAO」自然把区调滤掉 —— `ZSHA` 不是任何机场。北美把这个巧合打破
+  了：`MEM_22_CTR` 的 `MEM` 解析得出 `KMEM`，孟菲斯区调会冒充成一个坐在孟菲斯机
+  场里的席位。**这条只对 `controllers` 那一份用**，通播的 facility 也可能是 7，
+  一起滤会把机场卡上的通播滤掉。
 
 ## 空闲的扇区划分不画
 
