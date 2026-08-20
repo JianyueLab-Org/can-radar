@@ -28,6 +28,16 @@ bun run build && bun run start
 | 已飞航迹           | 本站 `/api/v1/track` —— **一个转发**，真正读 `flightPosition` 的是 can-api |
 | 航路解析           | 本站 `/api/v1/route`，服务端读 `data/navdata`                              |
 
+地图底图之外的那几块静态数据在 `public/`：机场坐标、FIR 多边形、进近空域，外加两
+张给北美用的对照表 —— `firs.json`（呼号前缀 → FIR，没有它 `MEM_22_CTR` 在地图上
+找不到自己的空域）和 `airport-codes.json`（三字代码 → ICAO，没有它 `MEM_TWR` 点开
+的机场卡是空的）。三者必须出自同一个 VATSpy commit，一起刷新：
+
+```bash
+node scripts/build-vatspy.mjs
+# 写 public/{boundaries.geojson,firs.json,airport-codes.json}
+```
+
 航迹为什么是转发而不是直连数据库：`flightPosition` 的 schema 归 can-api 所有，
 而这个站点是整个网络上最公开、被爬得最凶的一个页面。让最暴露的东西持有数据库
 口令，是这次拆分最不该做的事。顺带的好处是不用给 can-api 开 CORS —— 转发在服务

@@ -16,6 +16,7 @@ import { computed, ref, watch } from "vue";
 import { createTranslator } from "@/lib/i18n";
 import { getFacilityName } from "@/lib/facilities";
 import { loadAirports, type AirportTable } from "@/lib/airports";
+import { firMatch, loadFirs } from "@/lib/firs";
 import {
   altitudeColor,
   distanceNm,
@@ -121,7 +122,12 @@ const controllerRows = computed(() => {
   const c = props.controller;
   if (!c) return [];
   const rating = ratingTrans(c.rating, "en", "short");
+  const airspace =
+    firsVersion.value && !props.isAtis ? firMatch(c.callsign) : null;
   return [
+    ...(airspace
+      ? [{ label: t("details.airspace"), value: airspace.name }]
+      : []),
     { label: t("details.frequency"), value: c.frequency },
     { label: t("details.member"), value: `${c.name} (${c.cid})` },
     {
@@ -162,6 +168,28 @@ watch(
   async (arrival) => {
     if (arrival && !airportTable.value)
       airportTable.value = await loadAirports();
+  },
+  { immediate: true },
+);
+
+/**
+ * 席位管的那块空域叫什么 —— `MEM_22_CTR` 是「Memphis」，`RJDG_01_CTR` 是福冈的
+ * F01 扇区。
+ *
+ * 呼号本身只有前缀和席位类型，而北美的前缀（`MEM`、`JAX`）跟机场代码、跟边界 id
+ * 都不一样，光看呼号认不出是哪儿。名字和地图上高亮哪块多边形出自同一份对照表
+ * （`lib/firs`），所以卡片上写的和图上亮的必然是同一块空域。
+ *
+ * 表是异步取的，这个 ref 只是让名字到位之后那一行能补上 —— `firMatch` 本身不是
+ * 响应式的。
+ */
+const firsVersion = ref<string | null>(null);
+
+watch(
+  () => props.controller?.callsign,
+  async (callsign) => {
+    if (!callsign || firsVersion.value) return;
+    firsVersion.value = (await loadFirs())?.version ?? null;
   },
   { immediate: true },
 );

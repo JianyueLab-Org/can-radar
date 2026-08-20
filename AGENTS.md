@@ -105,32 +105,95 @@ Mono，以及**浮在整屏地图上的一摞卡片**取代原来的三栏。
 `PopupOverlay`），`VrButton` / `VrTabs` / `VrBlockTitle` / `VrBubble` 是它周围
 的零件。新面板套 `VrInfoPopup` 并用 `sections` 声明分段，别自己拼一遍卡片外壳。
 
-## public/ 里那三个数据文件
+## public/ 里那五个数据文件
 
 `airports.json`（VATSpy，机场坐标）、`boundaries.geojson`（VATSpy，FIR 多边形）、
-`tracon.geojson`（SimAware，进近空域）。两个数据源都在版权条里署了名，都是
-**CC BY-SA 4.0** —— 可以随仓库分发，这也是它们和 `data/navdata/` 的根本区别：
-navdata 是商业 AIRAC 派生物，永远不进这个公开仓库。
+`firs.json`（VATSpy，呼号前缀 → 边界 id）、`airport-codes.json`（VATSpy，三字代码
+→ ICAO）、`tracon.geojson`（SimAware，进近空域）。两个数据源都在版权条里署了名，
+都是 **CC BY-SA 4.0** —— 可以随仓库分发，这也是它们和 `data/navdata/` 的根本区
+别：navdata 是商业 AIRAC 派生物，永远不进这个公开仓库。
 
-**前两个是补回来的。** 从 can-web 拆出来时只带走了 `tracon.geojson`，另外两个
+**其中两个是补回来的。** 从 can-web 拆出来时只带走了 `tracon.geojson`，另外两个
 留在了原地，于是这个站从拆分那天起：航路线画不出来（`loadAirports()` 404 之后
 返回 `{}`，`airportAt()` 永远是 null，那条「直飞目的地」的降级弧线也就没有终
 点）、管制区边界一片空白、详情卡上的「剩余 / 预计到达」两行从来没出现过 ——
 而版权条一直在署名它并没有装的那批数据。Dockerfile 是 `COPY . .`，k8s 只挂
 navdata 的卷，所以没有任何运行时通路能补上它们：文件不在仓库里就是不在。
 
-刷新的办法在 can-web：`data/vatspy/README.md` + `scripts/build-airports.mjs`。
-那边仍然是上游，这边是拷贝。
+**`boundaries.geojson`、`firs.json` 和 `airport-codes.json` 必须出自同一个上游
+commit**，所以它们由**这个仓库的** `scripts/build-vatspy.mjs` 一起生成（commit
+写死在脚本里，改了要把三个文件一起提交）：
+
+```bash
+node scripts/build-vatspy.mjs [commit-ish]
+```
+
+以前不是这样 —— 两份分别取自不同时候的上游，于是 `.dat` 里 1408 条 FIR 中有 532
+条指向这边没有的多边形，日本的 ACC 扇区几乎全在里面。**匹配不到边界的席位是无声
+消失的**（不画多边形，CTR 也不落机场标牌），所以那种漂移的表现是「这个人没上
+线」而不是任何一处报错。`airports.json` 仍然是 can-web 的（`scripts/build-airports.mjs`），
+这边是拷贝。
+
+## 区调呼号怎么对上多边形：`src/lib/firs.ts`
+
+多边形只带一个 id（`KZME`），管制员登录用的是另一套写法（`MEM_22_CTR`）。对照表
+是 VATSpy.dat 的 `[FIRs]`/`[UIRs]`，编译进 `firs.json`，匹配照 vatsim-radar 的
+判据：**按下划线分段的最长前缀赢**。
+
+这以前是一堆手写规则（互相 `startsWith`、把 `A_B_CTR` 读成 `A-B` 扇区、三条写死
+的 `lax→kzla`/`hkg→vhhk`/`tpe→rcaa`），能猜中的只有「呼号第一段就是边界 id」这
+一种情况。中国和港台恰好都是这样，所以本网自己的空域一直是对的，而**北美整个错
+过** —— 美国的前缀是三字代码，`MEM` 和 `KZME` 没有公共前缀。日本的小扇区错得更
+隐蔽：`RJDG_01_CTR` 会匹配上父 FIR，于是「有人管 F01 扇区」画成了「有人管整个福
+冈」。
+
+三件事别踩：
+
+- **按段比较，不是裸的 `startsWith`**（上游是裸的）。VATSpy 里既有 `RJTG` 又有
+  `RJTG_O`（东京 T36 扇区），裸判断会把 `RJTG_OCEANIC_CTR` 判进 T36。
+- **`_O_` 不再表示海洋区。** 上游已经把东京海洋区拆成独立的 `RJJJ`，`RJTG_O` 现
+  在是 T36 的前缀。海陆之分只剩 `_FSS` 这一条判据，而且它是**同一个 id 两个要素
+  之间挑一个**（现在只有 `KZNY`、`SUEO` 用得上），不是过滤条件。
+- **上游的 `PRC` UIR 少了 ZHWH（武汉）。** 大陆九个 FIR 它只列了八个，补在
+  `scripts/build-vatspy.mjs` 的 `UIR_EXTRA` 里 —— 少了它的表现是 `PRC_FSS` 上线
+  时华中一块不上色，旁边八块都亮着，看上去像管辖范围本来如此。
+
+`ZBAA_C_CTR` 匹配到的是整个 `ZBAA`：上游把北京的中央扇区拆成了 `ZBAA-E`/
+`ZBAA-SW`，`ZBAA-C` 这个多边形已经不存在了，而扇区包里还有这个席位。退回父 FIR
+是这种情况下唯一能做对的事。`RJCG_*`（札幌）则是 VATSpy 根本没有的 FIR，匹配不
+到任何东西 —— 它在右边的席位列表里照样出现，只是地图上没有它的空域。
+
+## 北美的本场席位报的是三字代码
+
+`MEM_TWR` 而不是 `KMEM_TWR`。而这张图别处认的全是 ICAO —— 飞行计划里写 `KMEM`，
+`airports.json` 按 ICAO 索引坐标，METAR 也按 ICAO 查。所以在补上
+`airport-codes.json`（VATSpy.dat 的 `[Airports]`，`IATA/LID` 那一列）之前，**北
+美每一个机场卡都是空的**：席位那一栏列得出来（它和标牌用的是同一个前缀），进离
+场、天气、坐标全部对不上，而三者都是「查不到就安静地不显示」，看上去像那个机场
+此刻没有航班。解析在 `src/lib/airportCodes.ts`，判据照 vatsim-radar 的
+`realIata` / `iata` 两层。
+
+- **本场席位（放行/地面/塔台/通播）两张表都查，进近只查真的那张。** VATSpy 把机
+  场的备用写法放在 `IsPseudo=1` 的行上（多伦多的 `YYZ` 就在那儿），但同一批假行
+  里还混着进近的代码 —— `SCT` 挂在 KLAX 上、`NCT` 挂在 KSFO 上。塔台认得出 `YYZ`
+  是好事，把南加进近的标牌写成「KLAX」不是：它管的是一整片终端区，不是那一个场。
+- **本身就是某个机场 ICAO 的代码不进表**（`LEVS` 既是 LECU 的 LID，又是同一个场
+  的另一个 ICAO 写法）。查表的一方分不清手里那串是哪一种，让它原样通过就对了。
+- **`ownsAirspace` 现在是共享的**（`lib/facilities.ts`）。机场卡以前靠「呼号第一
+  段等于机场 ICAO」自然把区调滤掉 —— `ZSHA` 不是任何机场。北美把这个巧合打破
+  了：`MEM_22_CTR` 的 `MEM` 解析得出 `KMEM`，孟菲斯区调会冒充成一个坐在孟菲斯机
+  场里的席位。**这条只对 `controllers` 那一份用**，通播的 facility 也可能是 7，
+  一起滤会把机场卡上的通播滤掉。
 
 ## 空闲的扇区划分不画
 
-`boundaries.geojson` 的 768 个要素里有 343 个是扇区划分（`ADR-E`、`BIRD-N`），
+`boundaries.geojson` 的 1102 个要素里有 633 个是扇区划分（`ADR-E`、`RJDG-F01`），
 它们画在自己所属 FIR 的多边形之上 —— 全铺开就是每个被拆过的 FIR 一圈外框加几条
 内部分割线，叠成一张网。所以**没人管的时候只画 FIR 本身**（`idleHiddenBoundaries`）。
 
-判据是「父 FIR 也在这份数据里」，不是「id 里有连字符」：有 22 个子扇区找不到父
-要素，包括这张网络自己的 `ZJSY-*`（三亚）和 `TEH-*`，按连字符一刀切会让那几块空
-域整个消失。
+判据是「父 FIR 也在这份数据里」，不是「id 里有连字符」：有 32 个子扇区找不到父
+要素，包括这张网络自己的 `ZJSY-*`（三亚，父要素叫 `ZJSA`）和 `TEH-*`，按连字符
+一刀切会让那几块空域整个消失。
 
 一旦有人上了某个扇区，syncBoundaries 照常把它挪进 boundariesLayer 高亮 —— 「这
 块被拆开的空域现在有人管」正是必须画出来的信息。

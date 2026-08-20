@@ -50,6 +50,7 @@
       "heading": "機首方位",
       "squawk": "スコーク",
       "rules": "飛行方式",
+      "airspace": "管制空域",
       "frequency": "周波数",
       "rating": "レーティング",
       "flightPlan": "フライトプラン",
