@@ -18,6 +18,7 @@ import RadarMap from "@/components/RadarMap.vue";
 import RadarDetails from "@/components/RadarDetails.vue";
 import RadarAirport from "@/components/RadarAirport.vue";
 import RadarTraffic from "@/components/RadarTraffic.vue";
+import RadarBookings from "@/components/RadarBookings.vue";
 import VrButton from "@/components/vr/VrButton.vue";
 import VrBubble from "@/components/vr/VrBubble.vue";
 import { Icon } from "@jianyuelab-org/can-ui";
@@ -64,6 +65,8 @@ const theme = ref<"dark" | "light">("light");
 const railOpen = ref(true);
 /** 交通那张卡自己的折叠状态，和整列的开关是两件事。 */
 const trafficCollapsed = ref(false);
+/** 预约那张卡同理。默认展开 —— 板子多半只有几行，收着就等于没有这张卡。 */
+const bookingsCollapsed = ref(false);
 const activeTab = ref<"controllers" | "pilots">("controllers");
 /* 筛选是一个对象而不是一个字符串：文字框只是它的一项，另外三项（高度层、起降
  * 机场）是下拉。**四项一起作用到列表和地图**，见 mapPilots。 */
@@ -708,6 +711,22 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
         :selected="selected"
         :mine="myKey"
         :theme="theme"
+        @select="select($event)"
+      />
+
+      <!-- 预约管制。压在交通下面，因为它回答的是「等一下有谁开席」——
+           先看现在有没有人管，再看今晚几点会有。
+
+           **只对登录着的人渲染。** 板子上有成员用户名和自由填写的备注，那是网络
+           内部的东西，而这一页是全网最公开的一张；上游那条路由也确实要会话（见
+           `lib/reservations.ts`）。没登录时整张卡不出现，而不是出现之后写一句劝
+           人登录的话 —— 页眉上那个「登录」已经是入口了。 -->
+      <RadarBookings
+        v-if="signedIn"
+        v-model:collapsed="bookingsCollapsed"
+        :messages="messages"
+        :controllers="controllers"
+        :selected="selected"
         @select="select($event)"
       />
     </div>

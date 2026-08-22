@@ -113,6 +113,17 @@
       "noStations": "Nobody on station",
       "close": "Close"
     },
+    "bookings": {
+      "title": "Bookings",
+      "empty": "No bookings",
+      "error": "Could not load the bookings",
+      "live": "In progress",
+      "online": "ONLINE",
+      "mine": "ME",
+      "inMinutes": "in {n} min",
+      "inHours": "in {n} h",
+      "inDays": "in {n} d"
+    },
     "share": {
       "copied": "Link copied"
     }
