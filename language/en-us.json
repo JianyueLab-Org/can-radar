@@ -113,8 +113,18 @@
       "noStations": "Nobody on station",
       "close": "Close"
     },
+    "activities": {
+      "title": "Events",
+      "professional": "PRO",
+      "live": "In progress",
+      "registered": "{n} signed up",
+      "seats": "{open}/{total} positions open"
+    },
     "bookings": {
       "title": "Bookings",
+      "reservations": "Reservations",
+      "activitySeats": "Event positions",
+      "noSeats": "No positions booked for upcoming events",
       "empty": "No bookings",
       "error": "Could not load the bookings",
       "live": "In progress",

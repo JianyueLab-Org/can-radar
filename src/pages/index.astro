@@ -54,7 +54,12 @@ if (member) {
       client:load
     />
     <main id="main-content" tabindex="-1" class="flex min-h-0 flex-1 flex-col">
-      <Radar messages={radarMessages} member={member} client:only="vue" />
+      <Radar
+        messages={radarMessages}
+        member={member}
+        siteOrigin={siteOrigin}
+        client:only="vue"
+      />
     </main>
   </div>
 </BaseLayout>

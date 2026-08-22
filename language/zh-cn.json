@@ -113,8 +113,18 @@
       "noStations": "没有席位在线",
       "close": "关闭"
     },
+    "activities": {
+      "title": "活动",
+      "professional": "专业",
+      "live": "进行中",
+      "registered": "{n} 人报名",
+      "seats": "{open}/{total} 席位可约"
+    },
     "bookings": {
       "title": "预约管制",
+      "reservations": "个人预约",
+      "activitySeats": "活动席位",
+      "noSeats": "近期活动暂无人预约席位",
       "empty": "目前没有预约",
       "error": "取不到预约列表",
       "live": "进行中",

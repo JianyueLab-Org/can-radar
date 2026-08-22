@@ -51,6 +51,12 @@ export const LIMITS = {
    *  一桶挡的主要是登录着的人开一堆标签页，以及拿它当空转接口刷的量。卡片五分
    *  钟自己重取一次，一个标签页一小时也就十几次。 */
   reservations: { limit: 240, windowMs: HOUR },
+  /** 活动板（未来的活动 + 已被预约的活动席位）。按 IP 计。
+   *
+   *  它是公开的，所以这一桶是它唯一的门 —— 但真正挡住上游的不是这里，是那 60 秒
+   *  的进程内缓存加 in-flight 合流（`server/activityBoard.ts`）：这一桶挡的是打
+   *  到我们这儿的量，而缓存挡的是打到 can-api 的量，后者才是要紧的那个。 */
+  activityBoard: { limit: 240, windowMs: HOUR },
   /** 登出。按 IP 计，松一点没有意义 —— 一个人一小时点不了 60 次退出，而这条路
    *  由是本站唯一的写操作，值得有一个自己的上限。 */
   signout: { limit: 60, windowMs: HOUR },

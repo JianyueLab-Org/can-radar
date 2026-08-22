@@ -18,6 +18,7 @@ import RadarMap from "@/components/RadarMap.vue";
 import RadarDetails from "@/components/RadarDetails.vue";
 import RadarAirport from "@/components/RadarAirport.vue";
 import RadarTraffic from "@/components/RadarTraffic.vue";
+import RadarActivities from "@/components/RadarActivities.vue";
 import RadarBookings from "@/components/RadarBookings.vue";
 import VrButton from "@/components/vr/VrButton.vue";
 import VrBubble from "@/components/vr/VrBubble.vue";
@@ -27,6 +28,7 @@ import { AREA_COLORS, altitudeLegend, facilityColor } from "@/lib/radar";
 import { createTranslator } from "@/lib/i18n";
 import { myFlightKey, type Member } from "@/lib/member";
 import { DATAFEED_URL, type ApiData, type Pilot } from "@/lib/radarTypes";
+import { fetchActivityBoard, type ActivityBoard } from "@/lib/schedule";
 import {
   DEFAULT_SETTINGS,
   loadSettings,
@@ -52,6 +54,14 @@ const props = defineProps<{
    * `cid`，「我的飞机」全部依据就是这一个等号。
    */
   member: Member | null;
+  /**
+   * 主站的地址。
+   *
+   * 活动卡和活动席位那一行要链到主站的 `/activities/<id>` —— 这里是另一个源，
+   * 写 `href="/activities/3"` 会打在 radar.ceruleanavi.net 上然后 404（AGENTS
+   * 第 4 条，和页眉那份 `site()` 是同一条规矩）。
+   */
+  siteOrigin: string;
 }>();
 const t = createTranslator(props.messages);
 
@@ -67,6 +77,8 @@ const railOpen = ref(true);
 const trafficCollapsed = ref(false);
 /** 预约那张卡同理。默认展开 —— 板子多半只有几行，收着就等于没有这张卡。 */
 const bookingsCollapsed = ref(false);
+/** 活动那张卡同理。 */
+const activitiesCollapsed = ref(false);
 const activeTab = ref<"controllers" | "pilots">("controllers");
 /* 筛选是一个对象而不是一个字符串：文字框只是它的一项，另外三项（高度层、起降
  * 机场）是下拉。**四项一起作用到列表和地图**，见 mapPilots。 */
@@ -79,7 +91,32 @@ const settingsOpen = ref(false);
 /** 从 URL 带进来的初始视图，只在挂载时读一次。 */
 const initialView = ref(readView(""));
 
+/* ------------------------------------------------------------------ *
+ * 活动板
+ *
+ * 一份数据两个读者：活动卡画未来的活动，预约卡里「活动席位」那一段画它们已经有
+ * 人预约的席位。所以取数在这里，而不是两张卡各取一次 —— 同一个上游被同一页问两
+ * 遍，是那种只有翻网络面板才会发现的浪费。
+ *
+ * 五分钟一次。活动是几天前排的，比这更勤没有任何东西会变；本站那条路由后面还有
+ * 一份 60 秒的服务端缓存（`server/activityBoard.ts`），真正打到 can-api 的次数远
+ * 小于这里的频率。
+ * ------------------------------------------------------------------ */
+const board = ref<ActivityBoard | null>(null);
+const BOARD_REFRESH_MS = 5 * 60 * 1000;
+
+/**
+ * 这一页的钟。
+ *
+ * 活动卡和预约卡上的「进行中」「还有多久」只跟时间有关，不跟取数有关 —— 一场活
+ * 动开场的那一刻，卡片该自己翻过去，而不是等下一次请求回来才翻。一只钟喂两张
+ * 卡，而不是每张卡各起一个定时器。
+ */
+const now = ref(Date.now());
+
 let interval: ReturnType<typeof setInterval> | null = null;
+let boardInterval: ReturnType<typeof setInterval> | null = null;
+let clock: ReturnType<typeof setInterval> | null = null;
 let observer: MutationObserver | null = null;
 
 const lastUpdateLabel = computed(() =>
@@ -99,6 +136,12 @@ async function fetchData() {
   } finally {
     loading.value = false;
   }
+}
+
+/** 活动板。取不到就保留上一次的 —— 一次超时不该把卡片清空。 */
+async function fetchBoard() {
+  const next = await fetchActivityBoard();
+  if (next) board.value = next;
 }
 
 function syncTheme() {
@@ -145,10 +188,15 @@ onMounted(() => {
   document.addEventListener("keydown", onGlobalKeydown);
   fetchData();
   interval = setInterval(fetchData, 30000);
+  fetchBoard();
+  boardInterval = setInterval(fetchBoard, BOARD_REFRESH_MS);
+  clock = setInterval(() => (now.value = Date.now()), 30000);
 });
 
 onBeforeUnmount(() => {
   if (interval) clearInterval(interval);
+  if (boardInterval) clearInterval(boardInterval);
+  if (clock) clearInterval(clock);
   if (observer) observer.disconnect();
   document.removeEventListener("keydown", onGlobalKeydown);
 });
@@ -311,6 +359,11 @@ const selectedIsAtis = computed(
  * ------------------------------------------------------------------ */
 
 const signedIn = computed(() => !!props.member);
+
+/* 活动板的两个读者。空数组而不是 null：两张卡各自决定「没有内容时怎么办」，一
+ * 个还没取到的 null 和一个真的空掉的板子，在它们眼里是同一件事。 */
+const activities = computed(() => board.value?.activities ?? []);
+const activitySeats = computed(() => board.value?.seats ?? []);
 
 /** 自己那架飞机的键，没登录或者没连线时是 null。 */
 const myKey = computed(() => myFlightKey(data.value?.pilots, props.member));
@@ -714,19 +767,40 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
         @select="select($event)"
       />
 
-      <!-- 预约管制。压在交通下面，因为它回答的是「等一下有谁开席」——
-           先看现在有没有人管，再看今晚几点会有。
+      <!-- 活动。夹在交通和预约之间，这三张卡是一条时间轴：现在谁在线 → 将要
+           发生什么事 → 那些事和别的时段各会有谁开席。
 
-           **只对登录着的人渲染。** 板子上有成员用户名和自由填写的备注，那是网络
-           内部的东西，而这一页是全网最公开的一张；上游那条路由也确实要会话（见
-           `lib/reservations.ts`）。没登录时整张卡不出现，而不是出现之后写一句劝
-           人登录的话 —— 页眉上那个「登录」已经是入口了。 -->
+           **近期没有活动时整张卡不出现。** 一张永远空着的卡压在全网最公开的这一
+           页上，是每个人每次都要滑过去的一格噪音；而活动是间歇发生的东西，它不
+           在的时候不需要一个位置说它不在。 -->
+      <RadarActivities
+        v-if="activities.length"
+        v-model:collapsed="activitiesCollapsed"
+        :messages="messages"
+        :activities="activities"
+        :now="now"
+        :site-origin="siteOrigin"
+      />
+
+      <!-- 预约管制。最后一张，因为它最细 —— 上面两张说的是「有没有」，它说的是
+           「具体是谁、几点」。
+
+           卡上两段的可见性不一样：**活动席位人人可见**（上游那条是公开的），
+           **个人预约登录之后才有**（上游挂在 `WithPilot` 后面）。所以这里的 v-if
+           不是「登录了吗」而是「有没有东西可看」—— 匿名访客在有活动席位时照样看
+           得到这张卡，而登录着的人一直看得到，因为「今晚没有人预约」本身就是信
+           息。理由写在 `lib/schedule.ts` 顶上。 -->
       <RadarBookings
-        v-if="signedIn"
+        v-if="signedIn || activitySeats.length"
         v-model:collapsed="bookingsCollapsed"
         :messages="messages"
         :controllers="controllers"
         :selected="selected"
+        :seats="activitySeats"
+        :signed-in="signedIn"
+        :member-id="member?.username ?? null"
+        :now="now"
+        :site-origin="siteOrigin"
         @select="select($event)"
       />
     </div>
