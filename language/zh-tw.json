@@ -113,8 +113,18 @@
       "noStations": "沒有席位上線",
       "close": "關閉"
     },
+    "activities": {
+      "title": "活動",
+      "professional": "專業",
+      "live": "進行中",
+      "registered": "{n} 人報名",
+      "seats": "{open}/{total} 席位可約"
+    },
     "bookings": {
       "title": "預約管制",
+      "reservations": "個人預約",
+      "activitySeats": "活動席位",
+      "noSeats": "近期活動暫無人預約席位",
       "empty": "目前沒有預約",
       "error": "取不到預約列表",
       "live": "進行中",

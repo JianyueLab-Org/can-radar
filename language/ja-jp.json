@@ -113,8 +113,18 @@
       "noStations": "管制官はオンラインではありません",
       "close": "閉じる"
     },
+    "activities": {
+      "title": "イベント",
+      "professional": "専門",
+      "live": "実施中",
+      "registered": "{n} 名参加",
+      "seats": "空席 {open}/{total}"
+    },
     "bookings": {
       "title": "管制予約",
+      "reservations": "個人予約",
+      "activitySeats": "イベント席",
+      "noSeats": "今後のイベントに予約された席はありません",
       "empty": "予約はありません",
       "error": "予約を取得できません",
       "live": "実施中",
