@@ -113,6 +113,17 @@
       "noStations": "管制官はオンラインではありません",
       "close": "閉じる"
     },
+    "bookings": {
+      "title": "管制予約",
+      "empty": "予約はありません",
+      "error": "予約を取得できません",
+      "live": "実施中",
+      "online": "オンライン",
+      "mine": "自分",
+      "inMinutes": "{n} 分後",
+      "inHours": "{n} 時間後",
+      "inDays": "{n} 日後"
+    },
     "share": {
       "copied": "リンクをコピーしました"
     }

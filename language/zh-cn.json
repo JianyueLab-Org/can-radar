@@ -113,6 +113,17 @@
       "noStations": "没有席位在线",
       "close": "关闭"
     },
+    "bookings": {
+      "title": "预约管制",
+      "empty": "目前没有预约",
+      "error": "取不到预约列表",
+      "live": "进行中",
+      "online": "已上线",
+      "mine": "我",
+      "inMinutes": "{n} 分钟后",
+      "inHours": "{n} 小时后",
+      "inDays": "{n} 天后"
+    },
     "share": {
       "copied": "链接已复制"
     }

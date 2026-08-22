@@ -44,6 +44,13 @@ export const LIMITS = {
    *  那一刻。带 cookie 的请求才会真的打到 can-api，所以这一桶挡的主要是拿它当
    *  空转接口刷的量。 */
   session: { limit: 240, windowMs: HOUR },
+  /** 预约管制板。按 IP 计。
+   *
+   *  这一条和别的不一样：它**要带着会话 cookie 才会真的打到上游**，没有 cookie
+   *  的请求在路由里就答 401 了（见 `pages/api/v1/atc/reservations.ts`）。所以这
+   *  一桶挡的主要是登录着的人开一堆标签页，以及拿它当空转接口刷的量。卡片五分
+   *  钟自己重取一次，一个标签页一小时也就十几次。 */
+  reservations: { limit: 240, windowMs: HOUR },
   /** 登出。按 IP 计，松一点没有意义 —— 一个人一小时点不了 60 次退出，而这条路
    *  由是本站唯一的写操作，值得有一个自己的上限。 */
   signout: { limit: 60, windowMs: HOUR },

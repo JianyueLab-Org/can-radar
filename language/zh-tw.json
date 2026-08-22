@@ -113,6 +113,17 @@
       "noStations": "沒有席位上線",
       "close": "關閉"
     },
+    "bookings": {
+      "title": "預約管制",
+      "empty": "目前沒有預約",
+      "error": "取不到預約列表",
+      "live": "進行中",
+      "online": "已上線",
+      "mine": "我",
+      "inMinutes": "{n} 分鐘後",
+      "inHours": "{n} 小時後",
+      "inDays": "{n} 天後"
+    },
     "share": {
       "copied": "連結已複製"
     }
