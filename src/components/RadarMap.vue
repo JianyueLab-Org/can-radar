@@ -20,6 +20,7 @@
  */
 import { onMounted, onBeforeUnmount, ref, watch } from "vue";
 import L from "leaflet";
+import { ICP_FILING } from "@jianyuelab-org/can-ui/sites";
 /* leaflet.css **不在这里引**，在 BaseLayout.astro 里，排在 vr-theme.css 前面。
  *
  * 从这里引的话，它是这个岛屿的一个动态样式表，浏览器会在组件加载时把它插到
@@ -1945,6 +1946,21 @@ onMounted(async () => {
       'rel="noopener">CC BY-SA 4.0</a>) · TRACONs ' +
       '<a href="https://github.com/vatsimnetwork/simaware-tracon-project" ' +
       'target="_blank" rel="noopener">SimAware</a>',
+  );
+
+  // 中国大陆 ICP 备案号。按规定要在每一页的底部显示并链到工信部查询入口。
+  //
+  // **放在归属栏里，是因为这一页没有别的地方可放。** 这个站只有一个页面，而它
+  // 是 `h-dvh overflow-hidden`：没有页面滚动，也就没有页脚。左下角是自绘的缩放
+  // 控件那一列，右下角是比例尺和这条归属栏 —— 另起一个固定元素只能压在其中一
+  // 个上面。归属栏本来就是这一页的法定小字区（VATSpy 的 CC BY-SA 署名也在这
+  // 里），备案号属于同一类东西。
+  //
+  // 单独一次 addAttribution 而不是拼进上面那串：Leaflet 用 " | " 分隔各条，备
+  // 案号因此自成一段，不会读起来像底图署名的一部分。
+  map.attributionControl.addAttribution(
+    `<a href="${ICP_FILING.href}" target="_blank" rel="noopener noreferrer">` +
+      `${ICP_FILING.number}</a>`,
   );
 
   quietBoundariesLayer = L.layerGroup().addTo(map);
