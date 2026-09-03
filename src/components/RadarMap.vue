@@ -95,24 +95,49 @@ const TRACK_POINTS = 1200;
  *  filing 1500nm) would swamp the map, so the ring is clamped. */
 const MAX_RANGE_NM = 400;
 
+/**
+ * 深浅两套底图。
+ *
+ * **2026-09 从 CARTO 换成 Esri。** `basemaps.cartocdn.com` 开始给没有 API key 的
+ * 请求回一张**把 "API KEY REQUIRED" 烤进 PNG 里**的瓦片 —— HTTP 仍然是 200，图也
+ * 照画，所以只看状态码的探测一个都发现不了，得看图本身。
+ *
+ * 换供应商而不是去申请一把 key：这个仓库是公开的，客户端包里的 key 就是公开的
+ * key；而卫星底图本来就在 `server.arcgisonline.com` 上，换过去是少一家供应商，不
+ * 是多一家。
+ *
+ * Canvas 这两套只标国名，不画路网也不标城市 —— 比 CARTO 的 `*_all` 更干净，正是
+ * 压着航路线和航迹看的那种底图。城市名哪天要找回来，Esri 有一层
+ * `World_*_Gray_Reference` 可以叠上去，代价是瓦片请求翻一倍。
+ *
+ * can-database 的 `src/lib/mapBase.ts` 抄的是这里，两边要一起改。
+ */
 const TILES: Record<"dark" | "light", string> = {
-  dark: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
-  light: "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
+  dark: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+  light:
+    "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
 };
 
 /**
  * 卫星底图。
  *
  * 单独一条而不是并进 TILES，因为它和深浅两套不是同一个维度：深浅跟着主题走，卫
- * 星是人主动选的。它也没有 `{s}` 子域和 `{r}` 高清后缀 —— 照抄 CARTO 的模板会得
- * 到一片 404。
+ * 星是人主动选的。
  */
 const SATELLITE_TILE =
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 
 const SATELLITE_ATTRIBUTION = "Imagery © Esri, Maxar, Earthstar Geographics";
 
-/** 当前该用哪张底图。auto 跟主题，其余听设置的。 */
+/**
+ * 当前该用哪张底图。auto 跟主题，其余听设置的。
+ *
+ * 三张现在是同一个形状：同一个主机、`{z}/{y}/{x}` 的顺序、都没有 `{s}` 子域也没
+ * 有 `{r}` 高清后缀。所以换底图只剩一次 `setUrl` —— 以前那个 `tileOptions()` 是
+ * 在 CARTO 的 `{s}` 和卫星图的「没有 `{s}`」之间来回换 `subdomains` 的，三张都成
+ * 了 Esri 之后它没有东西可换。抄别家瓦片地址回来时记得这两个占位符要跟着一起带，
+ * 否则是一片 404。
+ */
 function tileUrl(): string {
   switch (props.settings.basemap) {
     case "satellite":
@@ -124,13 +149,6 @@ function tileUrl(): string {
     default:
       return TILES[props.theme];
   }
-}
-
-/** 卫星图的子域和高清后缀都不支持，所以选项要跟着底图换。 */
-function tileOptions(): { subdomains: string; maxZoom: number } {
-  return props.settings.basemap === "satellite"
-    ? { subdomains: "", maxZoom: 18 }
-    : { subdomains: "abcd", maxZoom: 18 };
 }
 
 const mapContainer = ref<HTMLDivElement | null>(null);
@@ -1760,11 +1778,7 @@ watch(
     props.settings.rangeRings,
   ],
   () => {
-    if (tileLayer) {
-      tileLayer.setUrl(tileUrl());
-      // 卫星图没有子域，换过去之后再换回来必须把它加回来，否则 {s} 展不开。
-      tileLayer.options.subdomains = tileOptions().subdomains;
-    }
+    if (tileLayer) tileLayer.setUrl(tileUrl());
     applyLayerVisibility();
   },
 );
@@ -1916,13 +1930,15 @@ onMounted(async () => {
 
   tileLayer = L.tileLayer(tileUrl(), {
     // The airspace credits are not decoration: VATSpy's data is CC BY-SA 4.0,
-    // which requires attribution wherever it is shown.
+    // which requires attribution wherever it is shown. The basemap half is the
+    // credit Esri's own service metadata asks for, and it covers all three
+    // basemaps now that they are all on arcgisonline.
     attribution:
-      "© OpenStreetMap contributors © CARTO · Airspace " +
+      "© Esri, HERE, Garmin, © OpenStreetMap contributors · Airspace " +
       '<a href="https://github.com/vatsimnetwork/vatspy-data-project" target="_blank" rel="noreferrer">VATSpy</a>' +
       " (CC BY-SA 4.0) · " +
       '<a href="https://github.com/vatsimnetwork/simaware-tracon-project" target="_blank" rel="noreferrer">SimAware</a>',
-    ...tileOptions(),
+    maxZoom: 18,
   }).addTo(map);
 
   // 比例尺挪到右下角：左下角现在是那一列控件的位置。
