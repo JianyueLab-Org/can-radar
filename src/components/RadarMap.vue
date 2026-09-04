@@ -130,13 +130,41 @@ const SATELLITE_TILE =
 const SATELLITE_ATTRIBUTION = "Imagery © Esri, Maxar, Earthstar Geographics";
 
 /**
+ * 每张底图**真正有数据**的最深一级。
+ *
+ * 三张的 URL 形状确实一样（同主机、`{z}/{y}/{x}`、无 `{s}` 无 `{r}`），但**数据
+ * 深度不一样**，而这一维正是从 CARTO 换过来时漏掉的：CARTO 的 `dark_all` 铺到
+ * z20，Esri 的 Canvas 只到 **z16**。地图的 `maxZoom` 还留着 18，于是 z17/z18 会去
+ * 请求根本不存在的级别 —— 而 Esri **不返回 404**，它返回一张 HTTP 200、写着
+ * "Map data not yet available" 的占位图，全球每一块都是同一张（2521 字节）。所以
+ * 这个故障看起来像「地图坏了」而不像「请求失败」，任何只看状态码的检查都发现不了。
+ *
+ * 实测（上海、北京、洛杉矶、内陆各测一遍，结论与位置无关）：
+ *   Canvas/World_Dark_Gray_Base    数据到 z16，z17+ 是占位图
+ *   Canvas/World_Light_Gray_Base   数据到 z16，z17+ 是占位图
+ *   World_Imagery                  z19 仍是真实影像
+ *
+ * `maxNativeZoom` 是 Leaflet 对这件事的标准答案：超过它就把最深那一级的瓦片放大，
+ * 而不是去要不存在的级别。放大的底图是糊的，但糊的地图远好过一张写着「暂无数据」
+ * 的灰板 —— 而且这一页在那个尺度上要看的是飞机，底图只是衬底。
+ *
+ * 换底图供应商时**这个值必须重新实测**，别照抄：它既不在服务的 LOD 元数据里
+ * （那里报到 23），也不会以错误码的形式告诉你。
+ */
+const MAX_NATIVE_ZOOM = { canvas: 16, satellite: 18 } as const;
+
+/** 当前底图能给到第几级真数据。 */
+function tileMaxNativeZoom(): number {
+  return props.settings.basemap === "satellite"
+    ? MAX_NATIVE_ZOOM.satellite
+    : MAX_NATIVE_ZOOM.canvas;
+}
+
+/**
  * 当前该用哪张底图。auto 跟主题，其余听设置的。
  *
- * 三张现在是同一个形状：同一个主机、`{z}/{y}/{x}` 的顺序、都没有 `{s}` 子域也没
- * 有 `{r}` 高清后缀。所以换底图只剩一次 `setUrl` —— 以前那个 `tileOptions()` 是
- * 在 CARTO 的 `{s}` 和卫星图的「没有 `{s}`」之间来回换 `subdomains` 的，三张都成
- * 了 Esri 之后它没有东西可换。抄别家瓦片地址回来时记得这两个占位符要跟着一起带，
- * 否则是一片 404。
+ * 三张的模板同形：同一个主机、`{z}/{y}/{x}` 的顺序、都没有 `{s}` 子域也没有 `{r}`
+ * 高清后缀。抄别家瓦片地址回来时记得这两个占位符要跟着一起带，否则是一片 404。
  */
 function tileUrl(): string {
   switch (props.settings.basemap) {
@@ -1778,7 +1806,12 @@ watch(
     props.settings.rangeRings,
   ],
   () => {
-    if (tileLayer) tileLayer.setUrl(tileUrl());
+    if (tileLayer) {
+      // 先改深度再 setUrl：setUrl 会触发 redraw，redraw 里的 _clampZoom 读的正是
+      // 这个值。反过来写会让新底图先按旧深度画一帧。
+      tileLayer.options.maxNativeZoom = tileMaxNativeZoom();
+      tileLayer.setUrl(tileUrl());
+    }
     applyLayerVisibility();
   },
 );
@@ -1939,6 +1972,7 @@ onMounted(async () => {
       " (CC BY-SA 4.0) · " +
       '<a href="https://github.com/vatsimnetwork/simaware-tracon-project" target="_blank" rel="noreferrer">SimAware</a>',
     maxZoom: 18,
+    maxNativeZoom: tileMaxNativeZoom(),
   }).addTo(map);
 
   // 比例尺挪到右下角：左下角现在是那一列控件的位置。
