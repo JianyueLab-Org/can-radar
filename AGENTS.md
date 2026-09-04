@@ -246,6 +246,28 @@ node scripts/build-vatspy.mjs [commit-ish]
 一旦有人上了某个扇区，syncBoundaries 照常把它挪进 boundariesLayer 高亮 —— 「这
 块被拆开的空域现在有人管」正是必须画出来的信息。
 
+## 底图：HTTP 200 不等于「有地图」
+
+底图的选型、候选清单、条款和到期日、以及自建的具体成本，全部记在
+**`docs/basemap.md`**。这里只放会咬人的三条。
+
+**一周之内栽了两次，两次都是 200，两次都是靠人截图才发现的。** CARTO 把
+"API KEY REQUIRED" 烤进 PNG 里；换到 Esri 之后超过 z16 返回一张写着
+"Map data not yet available" 的灰板（全球同一张，md5
+`f27d9de7f80c13501f470595e327aa6d`）。**探端点看状态码的检查一条都发现不了。**
+`scripts/check-basemap.mjs` 是为这两次写的，查的是内容不变量而不是状态码，挂在
+`basemap-check.yml` 上每天跑一次。
+
+**换供应商时「数据深度」必须重新实测。** CARTO 铺到 z20，Esri 的 Canvas 只到
+z16 —— 这个值**不在服务的 LOD 元数据里**（Esri 那里报到 23，那是切片方案不是数
+据），**也不会以错误码的形式告诉你**，只能一级一级抓瓦片看内容。测出来写进
+`MAX_NATIVE_ZOOM`，Leaflet 会拿最深那级放大，而不是去请求不存在的级别。深浅两
+套是 16，卫星是 18（实测 z19 仍有数据）。
+
+**同一份配置在 can-database 的 `src/lib/mapBase.ts` 有第二份拷贝。** 那边三个组
+件共用它，`TILES` 和 `TILE_MAX_NATIVE_ZOOM` 两个值要一起改 —— 这次的回归就是两
+边一起中的招。
+
 ## 地图上的向量颜色在 `lib/radar.ts`
 
 管制区填色（`AREA_COLORS`）和航路线（`ROUTE_COLORS`）是 JS 字面量，不是

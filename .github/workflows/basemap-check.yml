@@ -1,0 +1,33 @@
+name: Basemap check
+
+# 每天一次。底图供应商改政策不是高频事件，但**发现得晚**才是真代价 —— 2026-09
+# 那两次（CARTO 打水印、Esri 的 z17 占位图）都是等到有人截图才知道的。
+on:
+  schedule:
+    - cron: "0 2 * * *" # 每天 UTC 02:00 = 北京时间 10:00
+  workflow_dispatch:
+  # 改到底图那几个文件时也跑一次：maxNativeZoom 写错会被立刻抓住，而不是等到
+  # 明天早上，或者等到有人放大到 z17。
+  push:
+    branches: [main]
+    paths:
+      - "src/components/RadarMap.vue"
+      - "scripts/check-basemap.mjs"
+      - ".github/workflows/basemap-check.yml"
+
+# 只读。这个仓库按规矩不持有任何 Secret（见 AGENTS.md），这个检查也**刻意不往
+# 外发通知** —— 工作流失败本身就是通知，GitHub 会给仓库管理员发邮件。加一个
+# webhook 就等于给这个公开仓库开一个 Secret，为了一条告警不值得。
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+      # 没有依赖，不用装。脚本只用 node: 内置模块和 fetch。
+      - run: node scripts/check-basemap.mjs
