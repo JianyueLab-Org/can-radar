@@ -43,6 +43,7 @@ import {
   facilityRank,
   flightLevel,
   greatCircle,
+  hasPosition,
   isOnGround,
   type LatLon,
 } from "@/lib/radar";
@@ -300,7 +301,8 @@ function pilotSignature(
 ): string {
   return [
     isOnGround(pilot) ? "g" : "a",
-    Math.round(pilot.heading),
+    // 姿态和位置一起缺席。签名里写 0 是无害的：它只用来判断图标要不要重画。
+    Math.round(pilot.heading ?? 0),
     altitudeColor(pilot.altitude, props.theme),
     iconScale(),
     selected ? "s" : "",
@@ -349,7 +351,7 @@ function aircraftIcon(
     html: `
       <div style="
         width:${size}px;height:${size}px;
-        transform: rotate(${pilot.heading - 45}deg);
+        transform: rotate(${(pilot.heading ?? 0) - 45}deg);
         display:flex;align-items:center;justify-content:center;
         ${rings.length ? `border-radius:50%;box-shadow:${rings.join(",")};` : ""}
       ">
@@ -458,8 +460,11 @@ function syncPilots() {
   const seen = new Set<string>();
 
   for (const pilot of props.pilots) {
+    // `hasPosition` 是类型守卫，`Number.isFinite` 不是 —— 这里从前**已经**有这
+    // 一行检查，但 TypeScript 并不因此知道下面那两个值是 number，所以
+    // `L.marker([lat, lon])` 一直在类型上说着谎。见 `lib/radar.ts`。
+    if (!hasPosition(pilot)) continue;
     const { latitude: lat, longitude: lon } = pilot;
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
 
     const key = pilotKey(pilot);
     seen.add(key);
@@ -518,8 +523,14 @@ function pilotTooltip(key: string): string {
   const type = p.flight_plan?.aircraft
     ? ` · ${escapeHtml(p.flight_plan.aircraft)}`
     : "";
+  // 有标记就有位置，也就有这两个数（can-fsd 八个字段一起给）。仍然各挡一次：
+  // 一个 `undefined kt` 印在提示框里，比一个空着的提示框更让人以为是真的。
+  const level = Number.isFinite(p.altitude)
+    ? `FL${flightLevel(Math.round(p.altitude as number))}`
+    : "—";
+  const speed = Number.isFinite(p.groundspeed) ? `${p.groundspeed}kt` : "—";
   return `<span style="font-weight:600">${escapeHtml(p.callsign)}</span>${type}
-    <span style="opacity:.7"> · FL${flightLevel(Math.round(p.altitude))} · ${p.groundspeed}kt</span>`;
+    <span style="opacity:.7"> · ${level} · ${speed}</span>`;
 }
 
 /** One tag's worth of positions. */
@@ -1344,11 +1355,19 @@ async function loadTrack(key: string) {
   // The selection may have moved on while the request was in flight.
   if (props.selected !== key) return;
 
+  // 没有位置就没有「现在这一点」可以接在历史航迹后面。历史本身照画。
+  if (!hasPosition(pilot)) {
+    track = recorded;
+    trackKey = key;
+    drawTrail();
+    return;
+  }
+
   const last = recorded[recorded.length - 1];
   const live: TrailPoint = [
     pilot.latitude,
     pilot.longitude,
-    Math.round(pilot.altitude),
+    Math.round(pilot.altitude ?? 0),
   ];
   if (!last || last[0] !== live[0] || last[1] !== live[1]) recorded.push(live);
 
@@ -1503,6 +1522,9 @@ async function drawRoute() {
   const wanted = planKey(plan);
   if (routeKey !== wanted) loadRoute(wanted, plan);
 
+  // 没有位置就画不出「剩下的航路」—— 一对 undefined 会让整条线落在 NaN 上，
+  // Leaflet 的反应是整层不画，看起来像航路没解出来。
+  if (!hasPosition(pilot)) return;
   const position: LatLon = [pilot.latitude, pilot.longitude];
   const color = ROUTE_COLORS[props.theme];
   const arrival = airportAt(plan.arrival);
@@ -1908,9 +1930,7 @@ function fitToTraffic(force = false) {
   if (didInitialFit && !force) return;
   const points: L.LatLngExpression[] = [];
   for (const pilot of props.pilots) {
-    if (Number.isFinite(pilot.latitude) && Number.isFinite(pilot.longitude)) {
-      points.push([pilot.latitude, pilot.longitude]);
-    }
+    if (hasPosition(pilot)) points.push([pilot.latitude, pilot.longitude]);
   }
   for (const marker of atcMarkers.values()) points.push(marker.getLatLng());
   // 区调的标牌在 `sectorMarkers` 里，不在 `atcMarkers` 里 —— 漏掉它的表现是：网

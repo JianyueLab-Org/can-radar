@@ -25,19 +25,36 @@ export interface FlightPlan {
   route: string;
 }
 
+/**
+ * One connected aircraft.
+ *
+ * **Every position and attitude field is optional, and that is copied from the
+ * producer rather than defensive.** can-fsd declares all eight as `omitempty`
+ * pointers (`internal/api/datafeed.go`) and fills them only inside
+ * `if c.HasPosition()`, so a pilot who has connected but not yet sent a
+ * position packet has none of these keys at all — `TestUnpositionedClientOmitsCoordinates`
+ * over there exists to keep it that way.
+ *
+ * They used to be declared required here. The type was simply wrong, and the
+ * cost of a wrong type is that every reader looks correct: `[p.longitude,
+ * p.latitude]` type-checks fine and produces `[undefined, undefined]`, and
+ * arithmetic on `p.altitude` type-checks fine and produces `NaN`. Guard at the
+ * point of use — `Number.isFinite` rather than a truthiness test, since 0 is a
+ * perfectly good latitude, altitude and heading.
+ */
 export interface Pilot {
-  altitude: number;
-  bank: number;
+  altitude?: number;
+  bank?: number;
   callsign: string;
   cid: string;
   flight_plan?: FlightPlan;
-  groundspeed: number;
-  heading: number;
-  latitude: number;
+  groundspeed?: number;
+  heading?: number;
+  latitude?: number;
   logon_time: string;
-  longitude: number;
+  longitude?: number;
   name: string;
-  pitch: number;
+  pitch?: number;
   send_time: number;
   /**
    * Callsign of the controller holding this aircraft's radar track, absent
@@ -49,7 +66,7 @@ export interface Pilot {
    * this is what lets the page say so before the button is pressed.
    */
   tracked_by?: string;
-  transponder: number;
+  transponder?: number;
   visual_range: number;
 }
 
