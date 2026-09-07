@@ -9,6 +9,8 @@
  * cruise without opening a single popup.
  */
 
+import type { Pilot } from "./radarTypes";
+
 /**
  * Altitude bands, in feet. An aircraft's colour is the band its altitude falls
  * into, so the two palettes below have exactly one colour per band.
@@ -307,9 +309,16 @@ export function parseFeedTime(value: string | null | undefined): Date | null {
   );
 }
 
-/** `FL350`-style label. Sub-1000ft altitudes read better as plain feet. */
-export function flightLevel(altitude: number): string {
-  return Math.round(altitude / 100)
+/**
+ * `FL350`-style label. Sub-1000ft altitudes read better as plain feet.
+ *
+ * Takes `undefined` because `Pilot.altitude` is optional — can-fsd omits it
+ * until the first position packet. Callers that want to say "unknown" rather
+ * than "FL000" must check before calling; this only guarantees the label is a
+ * string rather than `FLNaN`.
+ */
+export function flightLevel(altitude: number | null | undefined): string {
+  return Math.round((altitude ?? 0) / 100)
     .toString()
     .padStart(3, "0");
 }
@@ -322,8 +331,31 @@ export function flightLevel(altitude: number): string {
  * enough to declutter a busy apron, and wrong only for the handful of seconds
  * around lift-off and touchdown.
  */
-export function isOnGround(pilot: { groundspeed: number }): boolean {
-  return pilot.groundspeed <= 40;
+export function isOnGround(pilot: { groundspeed?: number | null }): boolean {
+  // No groundspeed at all means the pilot has not reported a position yet.
+  // Treating that as "on the ground" is the cheap direction to be wrong in: it
+  // draws the aircraft a size smaller, whereas the other answer puts an
+  // aircraft nobody knows anything about into the airborne layer at cruise.
+  // `radarFilter.ts` and `airportView.ts` already made the same choice.
+  return (pilot.groundspeed ?? 0) <= 40;
+}
+
+/**
+ * Does this aircraft have a position we can put on a map?
+ *
+ * A type guard, so a caller that has checked gets `number` rather than
+ * `number | undefined` from the two fields — `Number.isFinite` on its own
+ * narrows nothing, which is how `L.marker([lat, lon])` kept type-checking
+ * beside a check that was already there.
+ *
+ * `Number.isFinite` rather than a null check: the keys can be absent, but a
+ * `null` or a `NaN` that survived a bad parse is equally undrawable, and 0 is
+ * a perfectly good latitude.
+ */
+export function hasPosition(
+  pilot: Pilot,
+): pilot is Pilot & { latitude: number; longitude: number } {
+  return Number.isFinite(pilot.latitude) && Number.isFinite(pilot.longitude);
 }
 
 /** Escape a string for interpolation into marker HTML. */

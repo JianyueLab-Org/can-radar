@@ -22,6 +22,7 @@ import {
   distanceNm,
   facilityColor,
   flightLevel,
+  hasPosition,
   isOnGround,
   parseFeedTime,
 } from "@/lib/radar";
@@ -77,15 +78,41 @@ function localTime(logonTime: string): string {
  * 挪进了下面的飞行计划一段。方块里只留高度、高度层、地速、航向：这四个是「这架飞
  * 机现在在干什么」，其余都是「它打算干什么」。
  */
+/**
+ * 「还没报过位置」写破折号，不写 0。
+ *
+ * 位置和姿态那八个字段是一起出现、一起缺席的（can-fsd 只在 `HasPosition()` 为
+ * 真时才填，见 `lib/radarTypes.ts` 的 `Pilot`）。刚连上还没发位置包的飞行员一
+ * 个都没有，而把它们当成 0 画出来，屏幕上是一架**高度 0、地速 0、航向 0** 的飞
+ * 机 —— 那读起来像「停在跑道头，机头朝北」，是一句完整的假话。这四格从前直接
+ * 读，于是画出来的是 `NaN` 和 `undefined`。
+ */
+const DASH = "—";
+const shown = (
+  value: number | null | undefined,
+  format: (n: number) => string,
+) => (Number.isFinite(value) ? format(value as number) : DASH);
+
 const pilotTiles = computed(() => {
   const p = props.pilot;
   if (!p) return [];
-  const altitude = Math.round(p.altitude);
   return [
-    { label: t("details.altitude"), value: numbers.format(altitude) },
-    { label: t("details.level"), value: `FL${flightLevel(altitude)}` },
-    { label: t("details.groundspeed"), value: String(p.groundspeed) },
-    { label: t("details.heading"), value: `${Math.round(p.heading)}°` },
+    {
+      label: t("details.altitude"),
+      value: shown(p.altitude, (a) => numbers.format(Math.round(a))),
+    },
+    {
+      label: t("details.level"),
+      value: shown(p.altitude, (a) => `FL${flightLevel(Math.round(a))}`),
+    },
+    {
+      label: t("details.groundspeed"),
+      value: shown(p.groundspeed, (g) => String(g)),
+    },
+    {
+      label: t("details.heading"),
+      value: shown(p.heading, (h) => `${Math.round(h)}°`),
+    },
   ];
 });
 
@@ -201,11 +228,13 @@ const remaining = computed(() => {
   const pilot = props.pilot;
   const icao = pilot?.flight_plan?.arrival?.trim().toUpperCase();
   const destination = icao ? airportTable.value?.[icao] : null;
-  if (!pilot || !destination) return null;
+  // 没有位置就没有「还有多远」。从前这里会把一对 undefined 送进 `distanceNm`，
+  // 得到 NaN，然后屏幕上出现「NaN nm」。
+  if (!pilot || !destination || !hasPosition(pilot)) return null;
 
+  const groundspeed = pilot.groundspeed ?? 0;
   const nm = distanceNm([pilot.latitude, pilot.longitude], destination);
-  const hours =
-    pilot.groundspeed >= MIN_ETA_GROUNDSPEED ? nm / pilot.groundspeed : null;
+  const hours = groundspeed >= MIN_ETA_GROUNDSPEED ? nm / groundspeed : null;
 
   return {
     distance: `${Math.round(nm)} nm`,

@@ -57,6 +57,24 @@ function clearFilter() {
   filter.value = { text: "", altitude: "any", departure: "", arrival: "" };
 }
 
+/**
+ * 高度和地速：没报过位置的飞行员写破折号，不写 0。
+ *
+ * can-fsd 只在飞行员发过位置包之后才给这八个字段（见 `lib/radarTypes.ts` 的
+ * `Pilot`）。这两栏从前直接读，于是刚连上的那几个人在列表里显示成
+ * **FL000 / undefined kt** —— 前者读起来像一架停在海平面的飞机，后者是屏幕上
+ * 一个刺眼但没人知道怎么来的字。
+ */
+function levelLabel(pilot: Pilot): string {
+  return Number.isFinite(pilot.altitude)
+    ? `FL${flightLevel(pilot.altitude)}`
+    : "—";
+}
+
+function speedLabel(pilot: Pilot): string {
+  return Number.isFinite(pilot.groundspeed) ? `${pilot.groundspeed} kt` : "—";
+}
+
 function pilotKey(pilot: Pilot): string {
   return `pilot:${pilot.cid || pilot.callsign}`;
 }
@@ -210,11 +228,9 @@ function pilotKey(pilot: Pilot): string {
                 </span>
               </span>
               <span class="rt-row_figures">
-                <span class="rt-row_trail vr-mono"
-                  >FL{{ flightLevel(p.altitude) }}</span
-                >
+                <span class="rt-row_trail vr-mono">{{ levelLabel(p) }}</span>
                 <span class="rt-row_trail rt-row_trail--dim vr-mono">
-                  {{ p.groundspeed }} kt
+                  {{ speedLabel(p) }}
                 </span>
               </span>
             </button>

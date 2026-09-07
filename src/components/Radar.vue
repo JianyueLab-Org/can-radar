@@ -119,22 +119,44 @@ let boardInterval: ReturnType<typeof setInterval> | null = null;
 let clock: ReturnType<typeof setInterval> | null = null;
 let observer: MutationObserver | null = null;
 
+/**
+ * 正在飞的那一次取数。
+ *
+ * 三十秒一轮，而一次取数可以慢过三十秒 —— 手机换基站、上游抖一下，都够。没有
+ * 这个 AbortController 的时候，慢的那一次回来得比后一次晚，于是它把**更新的**
+ * 一份数据覆盖成旧的：屏幕上飞机整体往回跳一格，然后下一轮再跳回来。看起来像
+ * 地图在抖，而不像一次请求乱序。
+ *
+ * `RadarBookings.vue` 和 `RadarAirport.vue` 早就是这么写的，这一条是漏的那个。
+ */
+let inflight: AbortController | null = null;
+
 const lastUpdateLabel = computed(() =>
   lastUpdate.value ? lastUpdate.value.toLocaleTimeString() : t("never"),
 );
 
 async function fetchData() {
+  // 上一次还没回来就不要它了：晚到的旧数据会覆盖新数据（见 `inflight` 上面）。
+  inflight?.abort();
+  const current = (inflight = new AbortController());
   try {
     loading.value = true;
     error.value = null;
-    const response = await fetch(DATAFEED_URL);
+    const response = await fetch(DATAFEED_URL, { signal: current.signal });
     if (!response.ok) throw new Error(t("error"));
-    data.value = (await response.json()) as ApiData;
+    const payload = (await response.json()) as ApiData;
+    // 中止之后才解完的那一次，结果直接丢掉。`abort()` 会让 fetch 抛，但 body
+    // 已经在读的那一刻是抛在这一行之后的，所以这里再挡一次。
+    if (current.signal.aborted) return;
+    data.value = payload;
     lastUpdate.value = new Date();
   } catch (err) {
+    // 自己中止的不是错误，更不该把上一份好数据旁边点亮一个红字。
+    if (current.signal.aborted) return;
     error.value = err instanceof Error ? err.message : t("error");
   } finally {
-    loading.value = false;
+    // 被顶掉的那一次不碰 loading —— 顶替它的那一次还在飞。
+    if (!current.signal.aborted) loading.value = false;
   }
 }
 
@@ -194,6 +216,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  inflight?.abort();
   if (interval) clearInterval(interval);
   if (boardInterval) clearInterval(boardInterval);
   if (clock) clearInterval(clock);
