@@ -9,5 +9,5 @@
     "noEmit": true
   },
   "include": [".astro/types.d.ts", "src/**/*.ts", "src/**/*.vue"],
-  "exclude": ["node_modules", "dist", "prisma/generated"]
+  "exclude": ["node_modules", "dist", "prisma/generated", "**/*.test.ts"]
 }

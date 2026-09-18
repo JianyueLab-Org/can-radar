@@ -63,15 +63,28 @@ let request: Promise<FirTable | null> | null = null;
  */
 const firsByHead = new Map<string, FirEntry[]>();
 const uirsByHead = new Map<string, UirEntry[]>();
+/**
+ * VATSpy 边界 id 的短名 → 那些 id。`RJTG-T30` 的短名是 `T30`，也就是 ATC info
+ * 里 `Covering sector - T30` 写的那个。
+ */
+const sectorIdsByName = new Map<string, string[]>();
 
 function index(entries: FirTable) {
   firsByHead.clear();
   uirsByHead.clear();
+  sectorIdsByName.clear();
   for (const entry of entries.firs) {
     const head = entry.prefix.split("_")[0];
     const list = firsByHead.get(head);
     if (list) list.push(entry);
     else firsByHead.set(head, [entry]);
+
+    const dash = entry.boundary.lastIndexOf("-");
+    if (dash < 0) continue;
+    const name = entry.boundary.slice(dash + 1).toUpperCase();
+    const ids = sectorIdsByName.get(name);
+    if (!ids) sectorIdsByName.set(name, [entry.boundary]);
+    else if (!ids.includes(entry.boundary)) ids.push(entry.boundary);
   }
   for (const entry of entries.uirs) {
     const head = entry.prefix.split("_")[0];
@@ -176,4 +189,33 @@ export function firMatch(callsign: string): FirMatch | null {
  */
 export function prefersOceanic(callsign: string): boolean {
   return callsign.toUpperCase().trim().endsWith("_FSS");
+}
+
+/**
+ * ATC info 里的扇区短名（`T30`、`F01`）对应哪几块 VATSpy 边界。
+ *
+ * 短名是边界 id 连字符后面那一段。全世界不止一个 `E` / `N`，所以：唯一就直接
+ * 用；不唯一时拿呼号第一段收窄到同一个 FIR（`RJTG_CTR` + `E` → `RJTG-E`）；
+ * 还是不唯一就当作认不出，总比把半个地球点亮好。
+ *
+ * 表还没取回来时返回空，和 `firMatch` 同一条规矩。
+ */
+export function boundariesForSectorName(
+  name: string,
+  hintCallsign?: string,
+): string[] {
+  const token = name.toUpperCase().trim();
+  if (!token || !table) return [];
+
+  const ids = sectorIdsByName.get(token);
+  if (!ids?.length) return [];
+  if (ids.length === 1) return [...ids];
+
+  const head = hintCallsign?.toUpperCase().trim().split("_")[0];
+  if (head) {
+    const scoped = ids.filter((id) => id === head || id.startsWith(`${head}-`));
+    if (scoped.length) return scoped;
+  }
+
+  return [];
 }

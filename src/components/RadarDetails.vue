@@ -16,6 +16,7 @@ import { computed, ref, watch } from "vue";
 import { createTranslator } from "@/lib/i18n";
 import { getFacilityName } from "@/lib/facilities";
 import { loadAirports, type AirportTable } from "@/lib/airports";
+import { allowsExtending, parseAtisSectors } from "@/lib/atisSectors";
 import { firMatch, loadFirs } from "@/lib/firs";
 import {
   altitudeColor,
@@ -149,11 +150,30 @@ const controllerRows = computed(() => {
   const c = props.controller;
   if (!c) return [];
   const rating = ratingTrans(c.rating, "en", "short");
+  const parsed = parseAtisSectors(c.text_atis);
   const airspace =
-    firsVersion.value && !props.isAtis ? firMatch(c.callsign) : null;
+    firsVersion.value && !props.isAtis && !parsed.covering.length
+      ? firMatch(c.callsign)
+      : null;
   return [
     ...(airspace
       ? [{ label: t("details.airspace"), value: airspace.name }]
+      : []),
+    ...(parsed.covering.length
+      ? [
+          {
+            label: t("details.coveringSectors"),
+            value: parsed.covering.join(", "),
+          },
+        ]
+      : []),
+    ...(parsed.extending.length && allowsExtending(c)
+      ? [
+          {
+            label: t("details.extendingSectors"),
+            value: parsed.extending.join(", "),
+          },
+        ]
       : []),
     { label: t("details.frequency"), value: c.frequency },
     { label: t("details.member"), value: `${c.name} (${c.cid})` },
