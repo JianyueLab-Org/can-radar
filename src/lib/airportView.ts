@@ -10,6 +10,11 @@
  */
 
 import { fieldCandidates } from "@/lib/airportCodes";
+import {
+  allowsExtending,
+  extendedCallsign,
+  parseAtisSectors,
+} from "@/lib/atisSectors";
 import { ownsAirspace } from "@/lib/facilities";
 import type { AtisData, Controller, Pilot } from "@/lib/radarTypes";
 
@@ -40,8 +45,16 @@ const GROUND_SPEED_MAX = 30;
  * 题是 `KMEM`（地图上的标牌已经解析过了，见 `lib/airportCodes`）。两种写法都
  * 认，因为卡片可能从解析过的标牌点开，也可能来自一个认不出的前缀。
  */
-function stationBelongsTo(callsign: string, icao: string): boolean {
-  return fieldCandidates(callsign).includes(icao);
+function stationBelongsTo(
+  station: Controller | AtisData,
+  icao: string,
+): boolean {
+  if (fieldCandidates(station.callsign).includes(icao)) return true;
+  if (!allowsExtending(station)) return false;
+  return parseAtisSectors(station.text_atis).extending.some((name) => {
+    const callsign = extendedCallsign(station.callsign, name);
+    return callsign ? fieldCandidates(callsign).includes(icao) : false;
+  });
 }
 
 /**
@@ -93,7 +106,7 @@ export function airportSnapshot(
   const stations = [
     ...controllers.filter((c) => !ownsAirspace(c.facility)),
     ...atis,
-  ].filter((station) => stationBelongsTo(station.callsign, code));
+  ].filter((station) => stationBelongsTo(station, code));
 
   return { icao: code, departures, arrivals, stations };
 }

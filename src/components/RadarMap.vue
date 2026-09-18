@@ -28,10 +28,21 @@ import { ICP_FILING } from "@jianyuelab-org/can-ui/sites";
  * `.leaflet-control-attribution a { color: #0078A8 }` 会赢过外观层同权重的那条，
  * 版权条上留着一串默认的亮蓝色链接和一块白底比例尺。改成在布局里引，顺序就由
  * 我们说了算。 */
-import { airportAt, loadAirports } from "@/lib/airports";
+import { airportAt, loadAirports, loadedAirports } from "@/lib/airports";
 import { loadAirportCodes, stationField } from "@/lib/airportCodes";
 import { getFacilityName, ownsAirspace } from "@/lib/facilities";
-import { firMatch, loadFirs, prefersOceanic } from "@/lib/firs";
+import {
+  allowsExtending,
+  extendedCallsign,
+  facilitySuffix,
+  parseAtisSectors,
+} from "@/lib/atisSectors";
+import {
+  boundariesForSectorName,
+  firMatch,
+  loadFirs,
+  prefersOceanic,
+} from "@/lib/firs";
 import {
   AREA_COLORS,
   ROUTE_COLORS,
@@ -237,31 +248,72 @@ const atcKey = (c: Controller) => `atc:${c.callsign}`;
  * ------------------------------------------------------------------ */
 
 /**
+ * VATSpy 边界 id → `boundaryShapes` 里的键。
+ *
+ * 一个 id 底下可能挂着两个要素（陆地一块、公海一块），它们在 `boundaryShapes`
+ * 里是两个键，见 `boundaryKey`。挑不到就用第一个：绝大多数 id 只有一个要素，
+ * 海陆之分根本不适用。
+ */
+function keysForBoundaryId(id: string, oceanic: boolean): string[] {
+  const candidates = boundaryKeysById.get(id);
+  if (!candidates?.length) return [];
+  const picked =
+    candidates.find((key) => isOceanicKey(key) === oceanic) ?? candidates[0];
+  return [picked];
+}
+
+function keysForBoundaryIds(ids: string[], oceanic: boolean): string[] {
+  const keys: string[] = [];
+  for (const id of ids) {
+    for (const key of keysForBoundaryId(id, oceanic)) {
+      if (!keys.includes(key)) keys.push(key);
+    }
+  }
+  return keys;
+}
+
+/**
  * 一个席位该点亮 `boundaryShapes` 里的哪几个键。
  *
  * 判据整个在 `@/lib/firs` 里（VATSpy 的呼号前缀表，最长前缀赢）；这里只做一件
- * 那边做不了的事：把边界 **id** 落到本地的**键**上。一个 id 底下可能挂着两个要
- * 素（陆地一块、公海一块），它们在 `boundaryShapes` 里是两个键，见 `boundaryKey`。
+ * 那边做不了的事：把边界 **id** 落到本地的**键**上。
+ *
+ * ATC info 写了 `Covering sector(s) - T30` 时，点亮的是名单里那些扇区，而不是
+ * 呼号默认的整块 FIR —— 否则 `RJTG_CTR` 会把整个东京画成有人管，哪怕他只 cover
+ * 了 T30。`Extending - ZGGG` 是同席位扩出去（FSS 除外），按 `{前缀}_{席位}` 再
+ * 匹配一次，加在这之上。
  *
  * 表还没取回来时返回空 —— 地图照常画，边界等 `loadFirs()` 落地后那一次
  * `syncBoundaries()` 再上色。
  */
-function boundaryKeysFor(callsign: string): string[] {
-  const match = firMatch(callsign);
-  if (!match) return [];
-
-  const oceanic = prefersOceanic(callsign);
-  const keys: string[] = [];
-
-  for (const id of match.boundaries) {
-    const candidates = boundaryKeysById.get(id);
-    if (!candidates?.length) continue;
-    // 挑不到就用第一个：绝大多数 id 只有一个要素，海陆之分根本不适用。
-    const picked =
-      candidates.find((key) => isOceanicKey(key) === oceanic) ?? candidates[0];
-    if (!keys.includes(picked)) keys.push(picked);
+function airspaceKeysFor(controller: Controller): string[] {
+  const oceanic = prefersOceanic(controller.callsign);
+  const parsed = parseAtisSectors(controller.text_atis);
+  const covering = keysForBoundaryIds(
+    parsed.covering.flatMap((name) =>
+      boundariesForSectorName(name, controller.callsign),
+    ),
+    oceanic,
+  );
+  const match = firMatch(controller.callsign);
+  const primary = covering.length
+    ? covering
+    : match
+      ? keysForBoundaryIds(match.boundaries, oceanic)
+      : [];
+  const extra = allowsExtending(controller)
+    ? keysForBoundaryIds(
+        parsed.extending.flatMap((name) => {
+          const callsign = extendedCallsign(controller.callsign, name);
+          return callsign ? (firMatch(callsign)?.boundaries ?? []) : [];
+        }),
+        oceanic,
+      )
+    : [];
+  const keys = [...primary];
+  for (const key of extra) {
+    if (!keys.includes(key)) keys.push(key);
   }
-
   return keys;
 }
 
@@ -273,7 +325,7 @@ function boundaryKeysFor(callsign: string): string[] {
  * FSS 以前只认 `PRC_FSS` 一个呼号，因为那时候没有对照表，别的 FSS 呼号匹配不出
  * 任何边界 —— 把它们算成「拥有空域」的结果是既没有多边形也没有机场标牌，人整个
  * 消失。现在 `[UIRs]` 在表里（`ASEA_FSS` 是东南亚那一串），这条限制没有必要了：
- * 匹配不到的席位由 `boundaryKeysFor` 返回空，本来就不会画错东西。
+ * 匹配不到的席位由 `airspaceKeysFor` 返回空，本来就不会画错东西。
  */
 function ownsAirspaceStation(controller: Controller): boolean {
   return ownsAirspace(controller.facility);
@@ -583,39 +635,112 @@ function stationGroupKey(
   return local ? stationField(callsign, true) : `pos:${callsign}`;
 }
 
+/**
+ * Extending 名单解析成要落在哪几个机场上。
+ *
+ * 呼号后缀跟登录席位走（`ZSPD_TWR` + `ZSSS` → 虹桥的塔台），自己那一场地跳过。
+ */
+function isAirportPosition(controller: Controller): boolean {
+  const suffix = facilitySuffix(controller.callsign);
+  return (
+    isLocalPosition(controller.facility, controller.facility === 7) ||
+    suffix === "DEL" ||
+    suffix === "GND" ||
+    suffix === "TWR" ||
+    suffix === "ATIS"
+  );
+}
+
+function extendingFieldsFor(controller: Controller): string[] {
+  if (!allowsExtending(controller)) return [];
+  const suffix = facilitySuffix(controller.callsign);
+  if (!suffix) return [];
+  const local = isAirportPosition(controller);
+  const self = stationField(controller.callsign, local);
+  const fields: string[] = [];
+  for (const name of parseAtisSectors(controller.text_atis).extending) {
+    const callsign = extendedCallsign(controller.callsign, name);
+    if (!callsign) continue;
+    const field = stationField(callsign, local);
+    if (!field || field === self || fields.includes(field)) continue;
+    fields.push(field);
+  }
+  return fields;
+}
+
+function fieldHasSamePosition(field: string, controller: Controller): boolean {
+  const suffix = facilitySuffix(controller.callsign);
+  const local = isAirportPosition(controller);
+  const same = (other: Controller) => {
+    if (other.callsign === controller.callsign) return false;
+    if (facilitySuffix(other.callsign) !== suffix) return false;
+    return stationField(other.callsign, local) === field;
+  };
+  return props.controllers.some(same) || props.atis.some(same);
+}
+
 function groupStations(): Map<string, StationGroup> {
   const groups = new Map<string, StationGroup>();
 
-  const add = (station: Controller, isAtis: boolean) => {
-    const lat = parseFloat(station.latitude);
-    const lon = parseFloat(station.longitude);
+  const add = (
+    station: Controller,
+    isAtis: boolean,
+    at?: { callsign: string; field: string; lat: number; lon: number },
+  ) => {
+    const lat = at?.lat ?? parseFloat(station.latitude);
+    const lon = at?.lon ?? parseFloat(station.longitude);
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
 
     // An ATIS is identified by the array it arrived in: the feed's `facility`
     // for an ATIS connection is not reliably 7.
     const facility = isAtis ? 7 : station.facility;
     const local = isLocalPosition(facility, isAtis);
-    const id = stationGroupKey(station.callsign, facility, isAtis);
+    const groupedCallsign = at?.callsign ?? station.callsign;
+    const id = at
+      ? local
+        ? at.field
+        : `pos:${groupedCallsign}`
+      : stationGroupKey(station.callsign, facility, isAtis);
+    const key = atcKey(station);
     // An approach whose airspace is drawn is labelled on that airspace's
     // boundary instead of at the airport it reports from.
-    const anchor = traconLabelPoints.get(atcKey(station));
+    const anchor = at ? null : traconLabelPoints.get(key);
     const group = groups.get(id) ?? {
-      code: stationField(station.callsign, local),
+      code: at?.field ?? stationField(station.callsign, local),
       lat: anchor?.[0] ?? lat,
       lon: anchor?.[1] ?? lon,
       local,
       stack: 0,
       stations: [],
     };
-    group.stations.push({ station, key: atcKey(station), facility, isAtis });
+    if (group.stations.some((entry) => entry.key === key)) return;
+    group.stations.push({ station, key, facility, isAtis });
     groups.set(id, group);
+  };
+
+  const addExtended = (station: Controller, isAtis: boolean) => {
+    for (const field of extendingFieldsFor(station)) {
+      if (fieldHasSamePosition(field, station)) continue;
+      const coords = airportAt(field);
+      if (!coords) continue;
+      add(station, isAtis, {
+        callsign: extendedCallsign(station.callsign, field),
+        field,
+        lat: coords[0],
+        lon: coords[1],
+      });
+    }
   };
 
   for (const controller of props.controllers) {
     if (ownsAirspaceStation(controller)) continue;
     add(controller, false);
+    addExtended(controller, false);
   }
-  for (const station of props.atis) add(station, true);
+  for (const station of props.atis) {
+    add(station, true);
+    addExtended(station, true);
+  }
 
   for (const group of groups.values()) {
     group.stations.sort(
@@ -830,6 +955,7 @@ let tracons: Map<string, GeoJSON.Feature[]> | null = null;
 let traconsRequest: Promise<void> | null = null;
 /** Drawn airspace per controller key, and the keys it accounts for. */
 const traconShapes = new Map<string, L.GeoJSON[]>();
+const traconSignatures = new Map<string, string>();
 const traconCovered = new Set<string>();
 /** Where an approach tag goes once its airspace is known — see traconLabel. */
 const traconLabelPoints = new Map<string, LatLon>();
@@ -909,18 +1035,58 @@ function traconsFor(callsign: string): GeoJSON.Feature[] {
   return [];
 }
 
+function traconsForName(name: string): GeoJSON.Feature[] {
+  if (!tracons) return [];
+  const token = name.toUpperCase().trim();
+  if (!token) return [];
+  return tracons.get(token) ?? traconsFor(token);
+}
+
+function traconFeaturesFor(controller: Controller): GeoJSON.Feature[] {
+  const parsed = parseAtisSectors(controller.text_atis);
+  const fromCovering = parsed.covering.flatMap((name) => traconsForName(name));
+  const fromExtending = allowsExtending(controller)
+    ? parsed.extending.flatMap((name) => {
+        const callsign = extendedCallsign(controller.callsign, name);
+        return callsign ? traconsFor(callsign) : [];
+      })
+    : [];
+  const fromCallsign =
+    controller.facility === FACILITY_APPROACH
+      ? traconsFor(controller.callsign)
+      : [];
+  const features: GeoJSON.Feature[] = [];
+  const seen = new Set<GeoJSON.Feature>();
+  for (const feature of [...fromCallsign, ...fromCovering, ...fromExtending]) {
+    if (seen.has(feature)) continue;
+    seen.add(feature);
+    features.push(feature);
+  }
+  return features;
+}
+
+function traconCoverSignature(controller: Controller): string {
+  const parsed = parseAtisSectors(controller.text_atis);
+  return `${controller.callsign}:${parsed.covering.join(",")}:${parsed.extending.join(",")}`;
+}
+
 async function syncTracons() {
   if (!boundariesLayer) return;
 
-  const approaches = props.controllers.filter(
-    (c) => c.facility === FACILITY_APPROACH,
-  );
-  if (approaches.length) await loadTracons();
+  const wantsTracon = props.controllers.some((controller) => {
+    if (controller.facility === FACILITY_APPROACH) return true;
+    const parsed = parseAtisSectors(controller.text_atis);
+    // T30 已经能在 FIR 表里解出来，不必为它拉 1.6 MB 的进近多边形。
+    return parsed.covering.some(
+      (name) => !boundariesForSectorName(name, controller.callsign).length,
+    );
+  });
+  if (wantsTracon) await loadTracons();
 
   const drawn = new Set<string>();
 
-  for (const controller of approaches) {
-    const features = traconsFor(controller.callsign);
+  for (const controller of props.controllers) {
+    const features = traconFeaturesFor(controller);
     if (!features.length) continue;
 
     const key = atcKey(controller);
@@ -930,11 +1096,15 @@ async function syncTracons() {
     const label = traconLabel(features);
     if (label) traconLabelPoints.set(key, label);
 
+    const signature = traconCoverSignature(controller);
     const existing = traconShapes.get(key);
-    if (existing) {
+    if (existing && traconSignatures.get(key) === signature) {
       for (const shape of existing)
         shape.setStyle(selected ? TRACON_SELECTED_STYLE : TRACON_STYLE);
       continue;
+    }
+    if (existing) {
+      for (const shape of existing) boundariesLayer.removeLayer(shape);
     }
 
     const shapes = features.map((feature) => {
@@ -946,12 +1116,14 @@ async function syncTracons() {
       return shape;
     });
     traconShapes.set(key, shapes);
+    traconSignatures.set(key, signature);
   }
 
   for (const [key, shapes] of traconShapes) {
     if (drawn.has(key)) continue;
     for (const shape of shapes) boundariesLayer.removeLayer(shape);
     traconShapes.delete(key);
+    traconSignatures.delete(key);
     traconLabelPoints.delete(key);
   }
 
@@ -1001,7 +1173,7 @@ const QUIET_BOUNDARY_MIN_ZOOM = 5;
  * VATSpy 偶尔把一块陆地和一块公海挂在同一个 id 底下 —— 现在是 `KZNY`（纽约）和
  * `SUEO`（蒙得维的亚），公海那块往往比陆地大好几倍。合成一个键的话，一个
  * `NY_CTR` 会同时点亮两块，地图上就成了「这个人管着半个大西洋」。这里把它们分
- * 成两个键，由 `boundaryKeysFor` 挑一个（判据见 `lib/firs` 的 `prefersOceanic`）。
+ * 成两个键，由 `airspaceKeysFor` 挑一个（判据见 `lib/firs` 的 `prefersOceanic`）。
  *
  * 东京以前也是这样一个 id 两块地；上游已经把东京海洋区拆成独立的 `RJJJ`，所以
  * 今天这条只剩两个 id 用得上 —— 留着是因为上游随时可能再合并回去，而合并回去的
@@ -1131,14 +1303,18 @@ function syncBoundaries() {
   const nextActive = new Set<string>();
   const nextControllers = new Map<string, Controller[]>();
 
+  const addOwner = (boundaryId: string, controller: Controller) => {
+    const list = nextControllers.get(boundaryId) ?? [];
+    if (!list.includes(controller)) list.push(controller);
+    nextControllers.set(boundaryId, list);
+  };
+
   for (const controller of props.controllers) {
     if (!ownsAirspaceStation(controller)) continue;
 
-    for (const boundaryId of boundaryKeysFor(controller.callsign)) {
+    for (const boundaryId of airspaceKeysFor(controller)) {
       nextActive.add(boundaryId);
-      const list = nextControllers.get(boundaryId) ?? [];
-      list.push(controller);
-      nextControllers.set(boundaryId, list);
+      addOwner(boundaryId, controller);
     }
   }
 
@@ -1177,62 +1353,118 @@ function syncBoundaries() {
   syncSectorTags();
 }
 
+function boundaryCentre(boundaryId: string): L.LatLng | null {
+  const shape = boundaryShapes.get(boundaryId)?.[0];
+  if (!shape) return null;
+  try {
+    return shape.getBounds().getCenter();
+  } catch {
+    return null;
+  }
+}
+
+function placeSectorTag(
+  markerId: string,
+  controller: Controller,
+  centre: L.LatLng,
+  label: string,
+  drawn: Set<string>,
+) {
+  const key = atcKey(controller);
+  drawn.add(markerId);
+  const chips = [
+    {
+      key,
+      label,
+      facility: controller.facility,
+    },
+  ];
+  const selectedKey = props.selected === key ? key : null;
+  const signature = `${chips[0].label}|${selectedKey ?? ""}|${centre.lat},${centre.lng}`;
+  const iconKey = `sector:${markerId}`;
+
+  let marker = sectorMarkers.get(markerId);
+  if (!marker) {
+    marker = L.marker(centre, { icon: tagIcon("", chips, selectedKey) });
+    marker.on("click", () => emit("select", key));
+    sectorMarkers.set(markerId, marker);
+    iconSignatures.set(iconKey, signature);
+    atcLayer?.addLayer(marker);
+  } else if (iconSignatures.get(iconKey) !== signature) {
+    marker.setLatLng(centre);
+    marker.setIcon(tagIcon("", chips, selectedKey));
+    iconSignatures.set(iconKey, signature);
+  }
+}
+
 /**
  * A tag on each staffed sector, so an en-route position is labelled the same
  * way an airport is rather than being a nameless green polygon. It sits at the
  * centre of the first piece of the boundary the controller owns.
+ *
+ * Extending 出去的区调再挂一块标牌（`ZSHA_CTR` 写 `Extending - ZGGG` 时广州那
+ * 块也有 CTR 标），点哪一块都选中登录的那个人。FSS 不扩，UIR 仍只挂第一块。
  */
 function syncSectorTags() {
   if (!atcLayer) return;
   const drawn = new Set<string>();
 
   for (const [boundaryId, controllers] of boundaryControllers) {
-    const shape = boundaryShapes.get(boundaryId)?.[0];
-    if (!shape) continue;
-
-    let centre: L.LatLng;
-    try {
-      centre = shape.getBounds().getCenter();
-    } catch {
-      continue;
-    }
+    const centre = boundaryCentre(boundaryId);
+    if (!centre) continue;
 
     for (const controller of controllers) {
       const key = atcKey(controller);
       // A position covering several boundaries is tagged on the first one.
       if (drawn.has(key)) continue;
-      drawn.add(key);
+      placeSectorTag(
+        key,
+        controller,
+        centre,
+        `${controller.callsign} ${controller.frequency}`,
+        drawn,
+      );
+    }
+  }
 
-      const chips = [
-        {
-          key,
-          label: `${controller.callsign} ${controller.frequency}`,
-          facility: controller.facility,
-        },
-      ];
-      const selectedKey = props.selected === key ? key : null;
-      const signature = `${chips[0].label}|${selectedKey ?? ""}|${centre.lat},${centre.lng}`;
-
-      let marker = sectorMarkers.get(key);
-      if (!marker) {
-        marker = L.marker(centre, { icon: tagIcon("", chips, selectedKey) });
-        marker.on("click", () => emit("select", key));
-        sectorMarkers.set(key, marker);
-        iconSignatures.set(`sector:${key}`, signature);
-        atcLayer.addLayer(marker);
-      } else if (iconSignatures.get(`sector:${key}`) !== signature) {
-        marker.setLatLng(centre);
-        marker.setIcon(tagIcon("", chips, selectedKey));
-        iconSignatures.set(`sector:${key}`, signature);
+  for (const controller of props.controllers) {
+    if (!ownsAirspaceStation(controller) || !allowsExtending(controller))
+      continue;
+    const oceanic = prefersOceanic(controller.callsign);
+    const primary = atcKey(controller);
+    const home = airspaceKeysFor(controller)[0];
+    for (const name of parseAtisSectors(controller.text_atis).extending) {
+      const callsign = extendedCallsign(controller.callsign, name);
+      if (!callsign) continue;
+      const taken = props.controllers.some(
+        (other) =>
+          other.callsign !== controller.callsign &&
+          other.callsign.toUpperCase() === callsign,
+      );
+      if (taken) continue;
+      const match = firMatch(callsign);
+      if (!match) continue;
+      for (const boundaryId of keysForBoundaryIds(match.boundaries, oceanic)) {
+        const markerId = `${primary}:${boundaryId}`;
+        if (drawn.has(markerId) || boundaryId === home) continue;
+        const centre = boundaryCentre(boundaryId);
+        if (!centre) continue;
+        placeSectorTag(
+          markerId,
+          controller,
+          centre,
+          `${callsign} ${controller.frequency}`,
+          drawn,
+        );
       }
     }
   }
 
-  for (const [key, marker] of sectorMarkers) {
-    if (drawn.has(key)) continue;
+  for (const [markerId, marker] of sectorMarkers) {
+    if (drawn.has(markerId)) continue;
     atcLayer.removeLayer(marker);
-    sectorMarkers.delete(key);
-    iconSignatures.delete(`sector:${key}`);
+    sectorMarkers.delete(markerId);
+    iconSignatures.delete(`sector:${markerId}`);
   }
 }
 
@@ -1764,7 +1996,7 @@ function focus(key: string) {
   // A CTR/FSS position is its airspace — frame the whole thing. A UIR covers
   // several FIRs, so the frame is every piece of it rather than the first.
   const bounds = L.latLngBounds([]);
-  for (const boundaryId of boundaryKeysFor(controller.callsign)) {
+  for (const boundaryId of airspaceKeysFor(controller)) {
     for (const shape of boundaryShapes.get(boundaryId) ?? []) {
       bounds.extend(shape.getBounds());
     }
@@ -2065,6 +2297,7 @@ onMounted(async () => {
   syncPilots();
   applyGroundFilter();
   applyLabelFilter();
+  refreshExtendingAirports();
   fitToTraffic();
 
   try {
@@ -2124,12 +2357,24 @@ watch(
   },
 );
 
+function refreshExtendingAirports() {
+  const needed = props.controllers.some(
+    (controller) => parseAtisSectors(controller.text_atis).extending.length,
+  );
+  if (!needed || loadedAirports()) return;
+  void loadAirports().then(() => {
+    syncStations();
+    syncTracons();
+  });
+}
+
 watch(
   () => [props.controllers, props.atis],
   () => {
     syncStations();
     syncTracons();
     syncBoundaries();
+    refreshExtendingAirports();
     fitToTraffic();
   },
 );

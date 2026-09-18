@@ -51,6 +51,8 @@
       "squawk": "Squawk",
       "rules": "Rules",
       "airspace": "Airspace",
+      "coveringSectors": "Covering",
+      "extendingSectors": "Extending",
       "frequency": "Frequency",
       "rating": "Rating",
       "flightPlan": "Flight plan",

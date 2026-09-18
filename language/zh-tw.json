@@ -51,6 +51,8 @@
       "squawk": "回應機",
       "rules": "飛行規則",
       "airspace": "管制區",
+      "coveringSectors": "覆蓋扇區",
+      "extendingSectors": "延伸席位",
       "frequency": "頻率",
       "rating": "等級",
       "flightPlan": "飛行計畫",
