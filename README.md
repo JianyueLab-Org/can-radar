@@ -28,6 +28,9 @@ bun run build && bun run start
 | 已飞航迹           | 本站 `/api/v1/track` —— **一个转发**，真正读 `flightPosition` 的是 can-api |
 | 航路解析           | 本站 `/api/v1/route`，服务端读 `data/navdata`                              |
 
+公开数据馈送带 CAN ID、客户端填报的姓名和模拟器位置。第 35 条评估见
+[`docs/dpia.md`](docs/dpia.md)。成员说明在文档站的[隐私说明](https://docs.ceruleanavi.net/zh_CN/privacy)。
+
 地图底图之外的那几块静态数据在 `public/`：机场坐标、FIR 多边形、进近空域，外加两
 张给北美用的对照表 —— `firs.json`（呼号前缀 → FIR，没有它 `MEM_22_CTR` 在地图上
 找不到自己的空域）和 `airport-codes.json`（三字代码 → ICAO，没有它 `MEM_TWR` 点开
