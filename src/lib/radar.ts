@@ -167,6 +167,26 @@ export function greatCircle(from: LatLon, to: LatLon, points = 64): LatLon[] {
 }
 
 /**
+ * Enough interpolation to bend a long leg, none wasted on a short one.
+ *
+ * The far end comes back unwrapped either way, so a caller chaining legs into
+ * one line starts the next leg from the last point returned, not from the
+ * raw waypoint.
+ */
+export function arc(from: LatLon, to: LatLon): LatLon[] {
+  const distance = distanceNm(from, to);
+  if (distance < 60) {
+    // Same shorter-way-round unwrap as greatCircle, or a short leg across
+    // ±180 draws back across the whole map.
+    let lon = to[1];
+    while (lon - from[1] > 180) lon -= 360;
+    while (lon - from[1] < -180) lon += 360;
+    return [from, lon === to[1] ? to : [to[0], lon]];
+  }
+  return greatCircle(from, to, Math.min(64, Math.ceil(distance / 60)));
+}
+
+/**
  * Position colours, from vatsim-radar's `getFacilityPositionColor`.
  *
  * Keyed by the `facility` field of the datafeed (see `@/lib/facilities`). One
