@@ -47,6 +47,7 @@ import {
   AREA_COLORS,
   ROUTE_COLORS,
   altitudeColor,
+  arc,
   distanceNm,
   escapeHtml,
   facilityColor,
@@ -1708,13 +1709,6 @@ function remainingRoute(points: RoutePoint[], position: LatLon): RoutePoint[] {
   return points.slice(best);
 }
 
-/** Enough interpolation to bend a long leg, none wasted on a short one. */
-function arc(from: LatLon, to: LatLon): LatLon[] {
-  const distance = distanceNm(from, to);
-  if (distance < 60) return [from, to];
-  return greatCircle(from, to, Math.min(64, Math.ceil(distance / 60)));
-}
-
 /**
  * The route the selected flight has left to fly.
  *
@@ -1818,8 +1812,10 @@ function drawRouteLine(ahead: RoutePoint[], position: LatLon, color: string) {
       runProcedure = procedure;
     }
 
-    run.push(...arc(from, to).slice(1));
-    from = to;
+    // Continue from the unwrapped end, so a run crossing ±180 stays one line.
+    const leg = arc(from, to);
+    run.push(...leg.slice(1));
+    from = leg[leg.length - 1];
   }
   flush();
 
@@ -1866,8 +1862,10 @@ function drawViaLabels(ahead: RoutePoint[], position: LatLon, color: string) {
     const procedure = point.kind === "sid" || point.kind === "star";
 
     if (point.via && !procedure) {
+      // Midpoint of the unwrapped leg, or a leg across ±180 labels at 0°.
+      const end = arc(from, to).at(-1)!;
       viaLabel(
-        [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2],
+        [(from[0] + end[0]) / 2, (from[1] + end[1]) / 2],
         point.via,
         color,
       ).addTo(routeLayer);
