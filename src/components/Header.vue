@@ -17,7 +17,12 @@
  *   来的 prop，雷达岛屿里的「我的飞机」也拿着它。
  */
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { Icon, SiteHeader, type NavChild } from "@jianyuelab-org/can-ui";
+import {
+  Icon,
+  SiteHeader,
+  type NavChild,
+  type SiteOrigins,
+} from "@jianyuelab-org/can-ui";
 import { createTranslator } from "@/lib/i18n";
 
 const props = withDefaults(
@@ -38,6 +43,8 @@ const props = withDefaults(
     locale?: string;
     /** 主站的地址。这排导航里除了雷达自己，全在主站上。 */
     siteOrigin?: string;
+    /** 「全网」菜单里其他站的地址，本地开发时覆盖成 :43xx，见 index.astro。 */
+    origins?: SiteOrigins;
   }>(),
   {
     memberName: "",
@@ -149,6 +156,7 @@ onBeforeUnmount(() => {
     :rating="rating"
     :home-href="site('/')"
     :labels="labels"
+    :origins="origins"
   >
     <template #account>
       <span

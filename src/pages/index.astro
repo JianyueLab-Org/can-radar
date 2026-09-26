@@ -29,6 +29,9 @@ const radarMessages = getMessages(locale, "radar");
 const member = await readMember(Astro);
 const siteOrigin = webOrigin();
 
+/** 页眉的「全网」菜单也要照这个地址走，本地起服务时才不会把主站的链接跳去线上。 */
+const origins = { web: siteOrigin };
+
 /**
  * 认出了人的那一份 HTML 是**因人而异**的，不能被任何一层缓存下来。
  *
@@ -51,6 +54,7 @@ if (member) {
       pathname={Astro.url.pathname}
       locale={locale}
       siteOrigin={siteOrigin}
+      origins={origins}
       client:load
     />
     <main id="main-content" tabindex="-1" class="flex min-h-0 flex-1 flex-col">
