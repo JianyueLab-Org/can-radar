@@ -1,12 +1,10 @@
 {
   "header": {
-    "forum": "論壇",
     "onlineMap": "雷達",
     "signin": "登入",
     "panel": "飛行員面板",
     "signout": "登出",
     "roster": "管制員名冊",
-    "home": "首頁",
     "openMenu": "開啟選單",
     "closeMenu": "關閉選單",
     "skipToContent": "跳至主要內容",

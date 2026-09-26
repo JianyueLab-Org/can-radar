@@ -1,12 +1,10 @@
 {
   "header": {
-    "forum": "フォーラム",
     "onlineMap": "レーダー",
     "signin": "ログイン",
     "panel": "パイロットパネル",
     "signout": "ログアウト",
     "roster": "管制員名簿",
-    "home": "ホーム",
     "openMenu": "メニューを開く",
     "closeMenu": "メニューを閉じる",
     "skipToContent": "本文へスキップ",
