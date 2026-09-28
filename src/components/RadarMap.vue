@@ -669,17 +669,6 @@ function extendingFieldsFor(controller: Controller): string[] {
   return fields;
 }
 
-function fieldHasSamePosition(field: string, controller: Controller): boolean {
-  const suffix = facilitySuffix(controller.callsign);
-  const local = isAirportPosition(controller);
-  const same = (other: Controller) => {
-    if (other.callsign === controller.callsign) return false;
-    if (facilitySuffix(other.callsign) !== suffix) return false;
-    return stationField(other.callsign, local) === field;
-  };
-  return props.controllers.some(same) || props.atis.some(same);
-}
-
 function groupStations(): Map<string, StationGroup> {
   const groups = new Map<string, StationGroup>();
 
@@ -721,7 +710,7 @@ function groupStations(): Map<string, StationGroup> {
 
   const addExtended = (station: Controller, isAtis: boolean) => {
     for (const field of extendingFieldsFor(station)) {
-      if (fieldHasSamePosition(field, station)) continue;
+      // 目标场已有同类席位也照样挂一块。
       const coords = airportAt(field);
       if (!coords) continue;
       add(station, isAtis, {
