@@ -1,15 +1,52 @@
 {
   "header": {
     "onlineMap": "雷达",
-    "signin": "登录",
+    "signIn": "登录",
+    "signOut": "退出登录",
+    "signingOut": "正在退出…",
+    "signOutFailed": "退出失败，请重试。",
     "panel": "飞行员面板",
-    "signout": "退出登录",
     "roster": "管制员名册",
-    "openMenu": "打开菜单",
-    "closeMenu": "关闭菜单",
-    "skipToContent": "跳到主要内容",
     "activities": "活动",
-    "downloads": "下载"
+    "downloads": "下载",
+    "skipToContent": "跳到主要内容",
+    "openMenu": "打开菜单",
+    "openSidebar": "打开导航",
+    "closeSidebar": "关闭导航",
+    "close": "关闭",
+    "dismiss": "关闭提示",
+    "sidebar": "侧栏",
+    "openUserMenu": "打开账号菜单",
+    "siteNavigation": "本站导航",
+    "workspace": {
+      "label": "工作区"
+    },
+    "search": {
+      "label": "搜索页面",
+      "placeholder": "跳转到页面…",
+      "noResults": "没有匹配的页面"
+    },
+    "theme": {
+      "label": "外观",
+      "light": "浅色",
+      "dark": "深色",
+      "system": "跟随系统"
+    },
+    "language": {
+      "label": "选择语言"
+    },
+    "rail": {
+      "collapse": "收起侧栏",
+      "expand": "展开侧栏",
+      "me": "我的"
+    },
+    "noAccess": {
+      "title": "你没有访问这个页面的权限",
+      "rating": "需要等级 {required} 或以上。",
+      "permission": "需要「{name}」权限。",
+      "signedInAs": "当前登录：{name}（#{id}）。",
+      "reachable": "你可以使用的站点"
+    }
   },
   "radar": {
     "title": "在线地图",

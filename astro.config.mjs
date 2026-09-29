@@ -31,7 +31,7 @@ export default defineConfig({
    * 上**。can-web 从一开始就关掉了它，can-dev 是踩了才关的，而两边第一个撞上
    * 的都是登出。
    *
-   * 在这个仓库里这一条是新长出来的：`/api/v1/signout` 之前，这个站点一个写操
+   * 在这个仓库里这一条是新长出来的：`/api/v1/auth/signout` 之前，这个站点一个写操
    * 作都没有，所以这个默认值从来没有机会伤到人。
    *
    * 关掉不等于不检查 —— 写操作的 Origin 由 `src/server/guard.ts` 比对**显式

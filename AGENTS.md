@@ -10,10 +10,11 @@ CAN 在线雷达，从 can-web 拆出来。Astro SSR + Vue 岛屿 + Tailwind v4 
 ```bash
 bun run dev      # :4323（4321 can-web，4322 can-dev）
 bun run lint     # format:check + astro check + vue-tsc
+bun run check:pages  # can-ui ⌘K 页面表里 radar 的每一条都有路由
 bun run build && bun run start
 ```
 
-没有测试套件。门禁是 `bun run lint` 加一次 `bun run build`。
+门禁是 `bun run lint`、`bun run build`、`bun run check:pages`，CI 同样三条（`check.yml`）。
 `astro check` 看不见 `.vue`，所以 `typecheck` 同时跑 `vue-tsc`——两个都要留着。
 
 ## 五条要紧的
@@ -50,7 +51,7 @@ radar.ceruleanavi.net 是那个域下面的一台主机，所以那枚 cookie �
 - **没有 cookie 就不问上游。** 匿名流量是这一页的绝大多数，带 cookie 才调用，
   否则每个爬虫都会变成 can-api 的一次数据库读。
 - **认出人的那份 HTML 不能被缓存**（`index.astro` 里那个 `private, no-store`）。
-- **`/api/v1/signout` 是本站唯一的写操作**，它连带着 `astro.config.mjs` 里关掉
+- **`/api/v1/auth/signout` 是本站唯一的写操作**，它连带着 `astro.config.mjs` 里关掉
   的 `checkOrigin` 和 `src/server/guard.ts` —— 三件事一起读，理由写在那两个文件
   里（反代 + TLS 终止会让 Astro 自带的那道检查永远 403）。
 
@@ -124,8 +125,9 @@ Mono，以及**浮在整屏地图上的一摞卡片**取代原来的三栏。
 另外 `vr-theme.css` 里针对版权条的几条带 `:root` 前缀，是为了压过 globals.css
 里 `.dark .leaflet-control-attribution` 那一档权重。
 
-**站头也换了，而且它从此不再是 can-web 的镜像**（56px、只有一条底边、选中项在下
-沿画 2px）。另外两个站的那份没有动。
+**站头是 can-ui `CanFrame` 的 `map` 布局**（56px、只有一条底边、选中项在下沿画
+2px），外壳在 `src/components/Frame.vue`。`actions` 插槽空着：地图控件在
+`Radar.vue` 里，和地图状态在同一个岛屿。
 
 **浮层分两栏，分工是「我在看谁」和「网络上有谁」。** 左边只有一张卡：选中的飞机
 或席位（`RadarDetails`）。右边是名单那一摞：机场卡（`RadarAirport`）、交通列表
