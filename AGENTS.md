@@ -51,7 +51,11 @@ radar.ceruleanavi.net 是那个域下面的一台主机，所以那枚 cookie �
 - **没有 cookie 就不问上游。** 匿名流量是这一页的绝大多数，带 cookie 才调用，
   否则每个爬虫都会变成 can-api 的一次数据库读。
 - **认出人的那份 HTML 不能被缓存**（`index.astro` 里那个 `private, no-store`）。
-- **`/api/v1/auth/signout` 是本站唯一的写操作**，它连带着 `astro.config.mjs` 里关掉
+- **通知铃**：`Frame.vue` 设 `notifications`。`src/pages/api/v1/notifications/[...path].ts`
+  转发五条路径给 can-api；请求不带 `can_session` 时答 401，不问上游。逻辑和测试在
+  `src/server/notifications.ts`、`src/server/notifications.test.ts`（`bun test` 直接跑，
+  `lint` 不跑它）。
+- **本站的写操作只有登出（`/api/v1/auth/signout`）和通知铃的标记已读**，它们连带着 `astro.config.mjs` 里关掉
   的 `checkOrigin` 和 `src/server/guard.ts` —— 三件事一起读，理由写在那两个文件
   里（反代 + TLS 终止会让 Astro 自带的那道检查永远 403）。
 

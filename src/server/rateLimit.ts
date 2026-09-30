@@ -57,9 +57,12 @@ export const LIMITS = {
    *  的进程内缓存加 in-flight 合流（`server/activityBoard.ts`）：这一桶挡的是打
    *  到我们这儿的量，而缓存挡的是打到 can-api 的量，后者才是要紧的那个。 */
   activityBoard: { limit: 240, windowMs: HOUR },
-  /** 登出。按 IP 计，松一点没有意义 —— 一个人一小时点不了 60 次退出，而这条路
-   *  由是本站唯一的写操作，值得有一个自己的上限。 */
+  /** 登出。按 IP 计，松一点没有意义 —— 一个人一小时点不了 60 次退出。 */
   signout: { limit: 60, windowMs: HOUR },
+  /** 通知铃。按 IP 计。一个标签页每分钟问一次未读数，打开面板再读一页、标几条。
+   *  一个可见标签页每小时约 60 次；3600 够一个出口 IP 后约 30 个可见标签页，留一倍余量。
+   *  不带 cookie 的请求在路由里就答 401，不问上游。 */
+  notifications: { limit: 3600, windowMs: HOUR },
 } as const satisfies Record<string, RateLimitRule>;
 
 type Bucket = { count: number; resetAt: number };
