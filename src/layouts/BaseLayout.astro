@@ -41,9 +41,8 @@ interface Props {
   title?: string;
   description?: string;
   /**
-   * Pages that render <Header> get the theme/language switcher inline in the
-   * header and set this to false. Only the chrome-less pages (auth, errors)
-   * fall back to the floating pill.
+   * Pages inside `Frame` (CanFrame carries ThemeLangControls) set this to
+   * false. Only the chrome-less pages fall back to the floating pill.
    */
   floatingControls?: boolean;
 }

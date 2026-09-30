@@ -1,9 +1,9 @@
 ---
 import BaseLayout from "@/layouts/BaseLayout.astro";
-import Header from "@/components/Header.vue";
+import Frame from "@/components/Frame.vue";
 import Radar from "@/components/Radar.vue";
 import { getLocale, getMessages } from "@/lib/i18n";
-import { webOrigin } from "@/server/config";
+import { signInUrl, webOrigin } from "@/server/config";
 import { readMember } from "@/server/session";
 
 const locale = getLocale(Astro.cookies);
@@ -29,9 +29,6 @@ const radarMessages = getMessages(locale, "radar");
 const member = await readMember(Astro);
 const siteOrigin = webOrigin();
 
-/** 页眉的「全网」菜单也要照这个地址走，本地起服务时才不会把主站的链接跳去线上。 */
-const origins = { web: siteOrigin };
-
 /**
  * 认出了人的那一份 HTML 是**因人而异**的，不能被任何一层缓存下来。
  *
@@ -45,25 +42,23 @@ if (member) {
 ---
 
 <BaseLayout title="Radar · Cerulean Aviation Network" floatingControls={false}>
-  <div class="flex h-dvh flex-col overflow-hidden bg-surface">
-    <Header
-      loggedIn={!!member}
-      memberName={member?.name ?? ""}
-      rating={member?.rating}
-      messages={headerMessages}
-      pathname={Astro.url.pathname}
-      locale={locale}
-      siteOrigin={siteOrigin}
-      origins={origins}
-      client:load
-    />
-    <main id="main-content" tabindex="-1" class="flex min-h-0 flex-1 flex-col">
+  <Frame
+    messages={headerMessages}
+    locale={locale}
+    pathname={Astro.url.pathname}
+    member={member}
+    siteOrigin={siteOrigin}
+    signInHref={signInUrl(Astro.url)}
+    client:load
+  >
+    {/* CanFrame 的 <main> 是 relative；这一层给 .radar 一个 flex 列。 */}
+    <div class="absolute inset-0 flex flex-col">
       <Radar
         messages={radarMessages}
         member={member}
         siteOrigin={siteOrigin}
         client:only="vue"
       />
-    </main>
-  </div>
+    </div>
+  </Frame>
 </BaseLayout>

@@ -14,7 +14,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "astro check && node ./scripts/typecheck-vue.mjs",
-    "lint": "bun run format:check && bun run typecheck"
+    "lint": "bun run format:check && bun run typecheck",
+    "check:pages": "can-ui-check-pages radar"
   },
   "dependencies": {
     "@astrojs/node": "^11",
@@ -22,7 +23,7 @@
     "@fontsource/jura": "^5.3.0",
     "@fontsource/libre-franklin": "^5.3.0",
     "@fontsource/roboto-mono": "^5.3.0",
-    "@jianyuelab-org/can-ui": "^0.4.2",
+    "@jianyuelab-org/can-ui": "27.1.0",
     "astro": "^7.2.0",
     "leaflet": "^1.9.4",
     "vue": "^3.5.24"

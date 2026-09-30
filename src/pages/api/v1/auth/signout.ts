@@ -5,12 +5,12 @@ import { crossOrigin, forbidden } from "@/server/guard";
 import { LIMITS, clientIp, enforce } from "@/server/rateLimit";
 
 /**
- * 登出 —— 本站唯一的写操作，而且它写的也不是数据，是那枚 cookie 的墓碑。
+ * 登出：`POST /api/v1/auth/signout`，can-ui `AccountMenu` 调的那一条。本站唯
+ * 一的写操作，写的不是数据，是那枚 cookie 的墓碑。
  *
  * 登录在主站，登出为什么在这里？因为这一页正是那种「开在副屏上一整天」的页面。
- * 让人为了退出跳去主站，多数人会直接关掉标签页，而那不叫退出。跳转过去也做不
- * 到「退出后还留在这张图上」——can-web 的登录页只接受站内的回跳地址（那是它
- * 防开放重定向的护栏，不该为了这点便利去拆）。
+ * 让人为了退出跳去主站，多数人会直接关掉标签页，而那不叫退出。在这里退出，人
+ * 退出后还留在这张图上。
  *
  * 它仍然不是一条凭据路径：这里既不认令牌也不签令牌，只是把请求带着 cookie 转
  * 给 can-api，再把它回的 `Set-Cookie` 原样传回浏览器。**清 cookie 的仍然是签

@@ -17,6 +17,7 @@ can-web 里的时候就不在 `PROTECTED_PREFIXES` 里。
 bun install
 bun run dev      # :4323（4321 是 can-web，4322 是 can-dev）
 bun run lint     # format:check + astro check + vue-tsc
+bun run check:pages  # can-ui ⌘K 页面表里 radar 的每一条都有路由
 bun run build && bun run start
 ```
 
@@ -79,11 +80,11 @@ can-api 签发会话时把 cookie 的 Domain 设成父域 `.ceruleanavi.net`（�
 机，浏览器于是把它一并带过来 —— 服务端渲染时拿它去问一次 can-api 的
 `/api/v1/auth/session`，就知道来的人是谁了。
 
-| 动作     | 在哪儿发生                                                             |
-| -------- | ---------------------------------------------------------------------- |
-| 登录     | 主站 `/signin`。这边只有一个链接过去，**没有密码表单**                 |
-| 认出是谁 | 本站服务端 `src/server/session.ts` → can-api `/api/v1/auth/session`    |
-| 登出     | 本站 `/api/v1/signout` —— 转发给 can-api，把它回的 `Set-Cookie` 传回去 |
+| 动作     | 在哪儿发生                                                                  |
+| -------- | --------------------------------------------------------------------------- |
+| 登录     | 主站 `/signin`。这边只有一个链接过去，**没有密码表单**                      |
+| 认出是谁 | 本站服务端 `src/server/session.ts` → can-api `/api/v1/auth/session`         |
+| 登出     | 本站 `/api/v1/auth/signout` —— 转发给 can-api，把它回的 `Set-Cookie` 传回去 |
 
 为什么不在这边验签：验签需要 `SESSION_SECRET`，那是「能签发任何人的会话」的能
 力。把它放进全网最公开的这个部署，省下的只是一次内网 HTTP，换来的是多一处可能
@@ -101,11 +102,12 @@ can-api 签发会话时把 cookie 的 Domain 设成父域 `.ceruleanavi.net`（�
 
 ### 环境变量
 
-| 变量             | 作用                       | 不设的话                        |
-| ---------------- | -------------------------- | ------------------------------- |
-| `CAN_API_ORIGIN` | 航迹、天气、会话都问它     | `https://api.ceruleanavi.net`   |
-| `CAN_WEB_ORIGIN` | 页眉导航和登录入口指向哪儿 | `https://ceruleanavi.net`       |
-| `PUBLIC_ORIGIN`  | 校验登出请求的 `Origin`    | `http://localhost:4323`（开发） |
+| 变量                    | 作用                                                              | 不设的话                        |
+| ----------------------- | ----------------------------------------------------------------- | ------------------------------- |
+| `CAN_API_ORIGIN`        | 航迹、天气、会话都问它                                            | `https://api.ceruleanavi.net`   |
+| `CAN_WEB_ORIGIN`        | 页眉导航和登录入口指向哪儿                                        | `https://ceruleanavi.net`       |
+| `PUBLIC_CAN_WEB_ORIGIN` | 全网菜单和 ⌘K 里主站的地址（构建时内联，can-ui `originsFromEnv`） | can-ui 默认值                   |
+| `PUBLIC_ORIGIN`         | 校验登出请求的 `Origin`                                           | `http://localhost:4323`（开发） |
 
 `PUBLIC_ORIGIN` 在部署里**必须设**：不设的话它是开发机的地址，浏览器发来的
 `Origin` 和它对不上，登出会稳定地 403。见 `src/server/guard.ts`。

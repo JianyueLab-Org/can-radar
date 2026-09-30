@@ -35,3 +35,14 @@ export const webOrigin = () =>
  */
 export const publicOrigin = () =>
   trim(process.env.PUBLIC_ORIGIN || "http://localhost:4323");
+
+/**
+ * can-web 的登录页，带上回到雷达的完整地址。
+ *
+ * 用 `publicOrigin()` 而不是 `returnTo.origin`：反代后面请求的 origin 是
+ * `http://`，配不上 can-web 回跳白名单里的 `https://`。片段不带。
+ */
+export function signInUrl(returnTo: URL): string {
+  const target = `${publicOrigin()}${returnTo.pathname}${returnTo.search}`;
+  return `${webOrigin()}/signin?callbackUrl=${encodeURIComponent(target)}`;
+}

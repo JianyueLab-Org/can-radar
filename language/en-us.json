@@ -1,15 +1,52 @@
 {
   "header": {
     "onlineMap": "Radar",
-    "signin": "Sign In",
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "signingOut": "Signing out…",
+    "signOutFailed": "Sign-out failed. Try again.",
     "panel": "Pilots Panel",
-    "signout": "Sign out",
     "roster": "ATC Roster",
-    "openMenu": "Open main menu",
-    "closeMenu": "Close menu",
-    "skipToContent": "Skip to main content",
     "activities": "Activities",
-    "downloads": "Downloads"
+    "downloads": "Downloads",
+    "skipToContent": "Skip to main content",
+    "openMenu": "Open main menu",
+    "openSidebar": "Open navigation",
+    "closeSidebar": "Close navigation",
+    "close": "Close",
+    "dismiss": "Dismiss",
+    "sidebar": "Sidebar",
+    "openUserMenu": "Open account menu",
+    "siteNavigation": "Site navigation",
+    "workspace": {
+      "label": "Workspace"
+    },
+    "search": {
+      "label": "Search pages",
+      "placeholder": "Jump to a page…",
+      "noResults": "No matching page"
+    },
+    "theme": {
+      "label": "Appearance",
+      "light": "Light",
+      "dark": "Dark",
+      "system": "Follow system"
+    },
+    "language": {
+      "label": "Select language"
+    },
+    "rail": {
+      "collapse": "Collapse sidebar",
+      "expand": "Expand sidebar",
+      "me": "Me"
+    },
+    "noAccess": {
+      "title": "You do not have access to this page",
+      "rating": "It needs rating {required} or above.",
+      "permission": "It needs the {name} permission.",
+      "signedInAs": "Signed in as {name} (#{id}).",
+      "reachable": "Sites you can use"
+    }
   },
   "radar": {
     "title": "Radar",
