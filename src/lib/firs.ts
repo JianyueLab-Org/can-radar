@@ -68,11 +68,20 @@ const uirsByHead = new Map<string, UirEntry[]>();
  * 里 `Covering sector - T30` 写的那个。
  */
 const sectorIdsByName = new Map<string, string[]>();
+/**
+ * ATIS often names a sector by the callsign suffix (`E1`, `NE`, `BJE1`),
+ * while the boundary calls it `BIRD-E` or `DAAA-NE`. Keep aliases from both
+ * VATSpy representations. VATSIM Radar resolves the full FIR row first and
+ * only then uses its geometry; doing this at the table level gives the same
+ * result without making the browser load the source .dat file.
+ */
+const sectorEntriesByName = new Map<string, FirEntry[]>();
 
 function index(entries: FirTable) {
   firsByHead.clear();
   uirsByHead.clear();
   sectorIdsByName.clear();
+  sectorEntriesByName.clear();
   for (const entry of entries.firs) {
     const head = entry.prefix.split("_")[0];
     const list = firsByHead.get(head);
@@ -80,11 +89,24 @@ function index(entries: FirTable) {
     else firsByHead.set(head, [entry]);
 
     const dash = entry.boundary.lastIndexOf("-");
-    if (dash < 0) continue;
-    const name = entry.boundary.slice(dash + 1).toUpperCase();
-    const ids = sectorIdsByName.get(name);
-    if (!ids) sectorIdsByName.set(name, [entry.boundary]);
-    else if (!ids.includes(entry.boundary)) ids.push(entry.boundary);
+    const aliases = new Set<string>();
+    if (dash >= 0) aliases.add(entry.boundary.slice(dash + 1));
+
+    const parts = entry.prefix.split("_");
+    if (parts.length > 1) aliases.add(parts.slice(1).join("_"));
+
+    for (const alias of aliases) {
+      const name = alias.toUpperCase().replace(/-/g, "_");
+      const ids = sectorIdsByName.get(name);
+      if (!ids) sectorIdsByName.set(name, [entry.boundary]);
+      else if (!ids.includes(entry.boundary)) ids.push(entry.boundary);
+
+      const matched = sectorEntriesByName.get(name);
+      if (matched) {
+        if (!matched.some((candidate) => candidate.prefix === entry.prefix))
+          matched.push(entry);
+      } else sectorEntriesByName.set(name, [entry]);
+    }
   }
   for (const entry of entries.uirs) {
     const head = entry.prefix.split("_")[0];
@@ -207,15 +229,23 @@ export function boundariesForSectorName(
   const token = name.toUpperCase().trim();
   if (!token || !table) return [];
 
-  const ids = sectorIdsByName.get(token);
-  if (!ids?.length) return [];
-  if (ids.length === 1) return [...ids];
-
+  const normalized = token.replace(/-/g, "_");
+  const entries = sectorEntriesByName.get(normalized) ?? [];
+  const ids = sectorIdsByName.get(normalized) ?? [];
   const head = hintCallsign?.toUpperCase().trim().split("_")[0];
-  if (head) {
-    const scoped = ids.filter((id) => id === head || id.startsWith(`${head}-`));
-    if (scoped.length) return scoped;
+
+  // First prefer the same FIR as the controller. This is the important case
+  // for short names such as E, N, or BJE: they are reused worldwide.
+  const scoped = head
+    ? entries.filter((entry) => entry.prefix.split("_")[0] === head)
+    : [];
+  if (scoped.length) {
+    const boundaries = [...new Set(scoped.map((entry) => entry.boundary))];
+    return boundaries;
   }
 
+  // A full boundary suffix may be globally unique even when the callsign
+  // prefix is absent or uses a legacy spelling.
+  if (ids.length === 1) return [...ids];
   return [];
 }
