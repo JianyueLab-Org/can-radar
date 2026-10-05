@@ -54,6 +54,7 @@ import {
   facilityLetter,
   facilityRank,
   flightLevel,
+  formatFrequency,
   greatCircle,
   hasPosition,
   isOnGround,
@@ -1443,8 +1444,8 @@ function placeSectorTag(
     facility: controller.facility,
     frequency: formatFrequency(controller.frequency),
   }));
-  const selectedKey = keys.includes(props.selected ?? "")
-    ? props.selected
+  const selectedKey: string | null = keys.includes(props.selected ?? "")
+    ? (props.selected ?? null)
     : null;
   const signature = `${chips.map((chip) => `${chip.key}:${chip.frequency}`).join(",")}|${selectedKey ?? ""}|${centre.lat},${centre.lng}`;
   const iconKey = `sector:${markerId}`;
