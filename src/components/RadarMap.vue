@@ -54,6 +54,7 @@ import {
   facilityLetter,
   facilityRank,
   flightLevel,
+  formatFrequency,
   greatCircle,
   hasPosition,
   isOnGround,
@@ -211,6 +212,63 @@ let resizeObserver: ResizeObserver | null = null;
 /** A recorded position: where, and how high. */
 type TrailPoint = [lat: number, lon: number, altitude: number];
 
+/**
+ * Leaflet does not apply an OpenLayers-style `wrapX` to GeoJSON polygons.
+ * Consequently a ring written as `179, -179` is interpreted as a line across
+ * almost the entire world instead of the short line across the date line.
+ *
+ * VATSIM Radar keeps the geometry continuous before it renders it. Do the same
+ * here: unwrap every linear path independently so consecutive longitudes never
+ * jump more than half a world. Values above 180 are intentional; Leaflet can
+ * project them into the adjacent wrapped world and the shape remains whole.
+ */
+function isGeoJsonPosition(
+  value: unknown,
+): value is [number, number, ...number[]] {
+  return (
+    Array.isArray(value) &&
+    typeof value[0] === "number" &&
+    typeof value[1] === "number"
+  );
+}
+
+function unwrapGeoJsonPath(path: unknown[]): unknown[] {
+  let previous: number | null = null;
+
+  return path.map((value) => {
+    if (!isGeoJsonPosition(value)) return value;
+
+    let longitude = value[0];
+    if (previous !== null) {
+      while (longitude - previous > 180) longitude -= 360;
+      while (longitude - previous < -180) longitude += 360;
+    }
+    previous = longitude;
+    return [longitude, ...value.slice(1)];
+  });
+}
+
+function unwrapGeoJsonCoordinates(value: unknown): unknown {
+  if (!Array.isArray(value) || value.length === 0) return value;
+  if (isGeoJsonPosition(value[0])) return unwrapGeoJsonPath(value);
+  return value.map(unwrapGeoJsonCoordinates);
+}
+
+function unwrapGeoJsonFeature(feature: GeoJSON.Feature): GeoJSON.Feature {
+  const geometry = feature.geometry as
+    | (GeoJSON.Geometry & { coordinates?: unknown })
+    | null;
+  if (!geometry || !("coordinates" in geometry)) return feature;
+
+  return {
+    ...feature,
+    geometry: {
+      ...geometry,
+      coordinates: unwrapGeoJsonCoordinates(geometry.coordinates),
+    } as GeoJSON.Geometry,
+  };
+}
+
 /** Aircraft markers, keyed the same way as `props.selected`. */
 const pilotMarkers = new Map<string, L.Marker>();
 /** Airport tags, keyed by airport code — one tag carries every position
@@ -297,7 +355,12 @@ function airspaceKeysFor(controller: Controller): string[] {
     oceanic,
   );
   const match = firMatch(controller.callsign);
-  const primary = covering.length
+  // An explicit Covering line is authoritative. If one of its names is not
+  // present in the VATSpy table, do not silently paint the controller's whole
+  // FIR: that would make `BJE1 BJE` look recognised while showing the wrong
+  // airspace. Falling back to the callsign is only valid when no Covering line
+  // was supplied at all.
+  const primary = parsed.covering.length
     ? covering
     : match
       ? keysForBoundaryIds(match.boundaries, oceanic)
@@ -462,7 +525,12 @@ function rangeStyle(color: string, selected: boolean): L.PathOptions {
  */
 function tagIcon(
   code: string,
-  chips: Array<{ key: string; label: string; facility: number }>,
+  chips: Array<{
+    key: string;
+    label: string;
+    facility: number;
+    frequency?: string;
+  }>,
   selectedKey: string | null,
   stack = 0,
 ): L.DivIcon {
@@ -471,9 +539,14 @@ function tagIcon(
       (
         chip,
       ) => `<span class="radar-tag__chip${chip.key === selectedKey ? " is-selected" : ""}"
-          data-key="${escapeHtml(chip.key)}"
-          style="background:${facilityColor(chip.facility)}"
-        >${escapeHtml(chip.label)}</span>`,
+           data-key="${escapeHtml(chip.key)}"
+           title="${escapeHtml(chip.frequency ? `${chip.label} ${chip.frequency}` : chip.label)}"
+           style="background:${facilityColor(chip.facility)}"
+         ><span class="radar-tag__chip_facility">${escapeHtml(chip.label)}</span>${
+           chip.frequency
+             ? `<span class="radar-tag__chip_frequency">${escapeHtml(chip.frequency)}</span>`
+             : ""
+         }</span>`,
     )
     .join("");
 
@@ -1098,7 +1171,7 @@ async function syncTracons() {
     }
 
     const shapes = features.map((feature) => {
-      const shape = L.geoJSON(feature, {
+      const shape = L.geoJSON(unwrapGeoJsonFeature(feature), {
         style: selected ? TRACON_SELECTED_STYLE : TRACON_STYLE,
       });
       shape.on("click", () => emit("select", key));
@@ -1225,7 +1298,9 @@ function buildBoundaries(data: GeoJSON.FeatureCollection) {
     const parent = raw.includes("-") ? raw.slice(0, raw.indexOf("-")) : null;
     if (parent && rawIds.has(parent)) idleHiddenBoundaries.add(key);
 
-    const shape = L.geoJSON(feature, { style: inactiveStyle() });
+    const shape = L.geoJSON(unwrapGeoJsonFeature(feature), {
+      style: inactiveStyle(),
+    });
     const shapes = boundaryShapes.get(key) ?? [];
     shapes.push(shape);
     boundaryShapes.set(key, shapes);
@@ -1355,28 +1430,33 @@ function boundaryCentre(boundaryId: string): L.LatLng | null {
 
 function placeSectorTag(
   markerId: string,
-  controller: Controller,
+  controllers: Controller[],
   centre: L.LatLng,
-  label: string,
   drawn: Set<string>,
 ) {
-  const key = atcKey(controller);
+  if (!controllers.length) return;
+  const keys = controllers.map(atcKey);
   drawn.add(markerId);
-  const chips = [
-    {
-      key,
-      label,
-      facility: controller.facility,
-    },
-  ];
-  const selectedKey = props.selected === key ? key : null;
-  const signature = `${chips[0].label}|${selectedKey ?? ""}|${centre.lat},${centre.lng}`;
+  for (const key of keys) drawn.add(key);
+  const chips = controllers.map((controller) => ({
+    key: atcKey(controller),
+    label: controller.callsign,
+    facility: controller.facility,
+    frequency: formatFrequency(controller.frequency),
+  }));
+  const selectedKey: string | null = keys.includes(props.selected ?? "")
+    ? (props.selected ?? null)
+    : null;
+  const signature = `${chips.map((chip) => `${chip.key}:${chip.frequency}`).join(",")}|${selectedKey ?? ""}|${centre.lat},${centre.lng}`;
   const iconKey = `sector:${markerId}`;
 
   let marker = sectorMarkers.get(markerId);
   if (!marker) {
     marker = L.marker(centre, { icon: tagIcon("", chips, selectedKey) });
-    marker.on("click", () => emit("select", key));
+    marker.on("click", (event) => {
+      const key = clickedKey(event, keys[0] ?? "");
+      if (key) emit("select", key);
+    });
     sectorMarkers.set(markerId, marker);
     iconSignatures.set(iconKey, signature);
     atcLayer?.addLayer(marker);
@@ -1403,18 +1483,10 @@ function syncSectorTags() {
     const centre = boundaryCentre(boundaryId);
     if (!centre) continue;
 
-    for (const controller of controllers) {
-      const key = atcKey(controller);
-      // A position covering several boundaries is tagged on the first one.
-      if (drawn.has(key)) continue;
-      placeSectorTag(
-        key,
-        controller,
-        centre,
-        `${controller.callsign} ${controller.frequency}`,
-        drawn,
-      );
-    }
+    const visibleControllers = controllers.filter(
+      (controller) => !drawn.has(atcKey(controller)),
+    );
+    placeSectorTag(boundaryId, visibleControllers, centre, drawn);
   }
 
   for (const controller of props.controllers) {
@@ -1439,13 +1511,7 @@ function syncSectorTags() {
         if (drawn.has(markerId) || boundaryId === home) continue;
         const centre = boundaryCentre(boundaryId);
         if (!centre) continue;
-        placeSectorTag(
-          markerId,
-          controller,
-          centre,
-          `${callsign} ${controller.frequency}`,
-          drawn,
-        );
+        placeSectorTag(markerId, [controller], centre, drawn);
       }
     }
   }
@@ -2530,6 +2596,9 @@ onBeforeUnmount(() => {
 }
 
 .radar-tag__chip {
+  display: inline-flex;
+  gap: 3px;
+  align-items: baseline;
   padding: 0 4px;
   border-radius: 3px;
   /* 席位色是饱和的实色，白字在六种颜色上都读得动 —— 这里**不跟主题走**，
@@ -2541,6 +2610,14 @@ onBeforeUnmount(() => {
   letter-spacing: 0.04em;
   /* 方块才是点击目标，围着它们的标签不是。 */
   cursor: pointer;
+}
+
+.radar-tag__chip_frequency {
+  font-family: var(--vr-font-mono);
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0;
+  opacity: 0.92;
 }
 
 .radar-tag__chip.is-selected {

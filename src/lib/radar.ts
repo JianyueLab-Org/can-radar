@@ -210,6 +210,23 @@ export function facilityColor(facility: number): string {
 }
 
 /**
+ * Frequencies are part of the top-down picture, not merely detail-card data.
+ * Keep the feed's precision when it is useful, but make the common VATSIM
+ * spelling stable so two positions can be compared at a glance.
+ */
+export function formatFrequency(
+  value: string | number | null | undefined,
+): string {
+  const text = String(value ?? "").trim();
+  if (!text) return "—";
+
+  const number = Number(text);
+  if (!Number.isFinite(number)) return text;
+
+  return number.toFixed(3);
+}
+
+/**
  * 管制区多边形和航路线的颜色。
  *
  * **为什么是字面量而不是 vr-theme.css 的记号：** 地图开着 `preferCanvas`，多边
