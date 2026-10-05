@@ -16,7 +16,12 @@ import { loadAirportCodes } from "@/lib/airportCodes";
 import { airportSnapshot, fetchMetar } from "@/lib/airportView";
 import { getFacilityName } from "@/lib/facilities";
 import { createTranslator } from "@/lib/i18n";
-import { altitudeColor, facilityColor, flightLevel } from "@/lib/radar";
+import {
+  altitudeColor,
+  facilityColor,
+  flightLevel,
+  formatFrequency,
+} from "@/lib/radar";
 import VrInfoPopup, {
   type InfoPopupSection,
 } from "@/components/vr/VrInfoPopup.vue";
@@ -169,7 +174,7 @@ const sections = computed<InfoPopupSection[]>(() => {
               }}
             </span>
             <span class="ra-item_callsign">{{ station.callsign }}</span>
-            <span class="ra-item_trail vr-mono">{{ station.frequency }}</span>
+            <span class="ra-item_trail vr-mono">{{ formatFrequency(station.frequency) }}</span>
           </button>
         </li>
       </ul>

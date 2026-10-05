@@ -24,6 +24,13 @@ describe("parseAtisSectors", () => {
     });
   });
 
+  test("accepts a short Covering line with multiple sector names", () => {
+    expect(parseAtisSectors(["Covering - BJE1 BJE"])).toEqual({
+      covering: ["BJE1", "BJE"],
+      extending: [],
+    });
+  });
+
   test("reads Extending as same-position airports", () => {
     expect(parseAtisSectors(["Extending - ZSSS"])).toEqual({
       covering: [],

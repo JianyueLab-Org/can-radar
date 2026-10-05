@@ -17,7 +17,12 @@ import VrInfoPopup from "@/components/vr/VrInfoPopup.vue";
 import VrButton from "@/components/vr/VrButton.vue";
 import { getFacilityName } from "@/lib/facilities";
 import { createTranslator } from "@/lib/i18n";
-import { altitudeColor, facilityColor, flightLevel } from "@/lib/radar";
+import {
+  altitudeColor,
+  facilityColor,
+  flightLevel,
+  formatFrequency,
+} from "@/lib/radar";
 import { isFiltering, type TrafficFilter } from "@/lib/radarFilter";
 import type { Controller, Pilot } from "@/lib/radarTypes";
 
@@ -192,7 +197,7 @@ function pilotKey(pilot: Pilot): string {
                 <span class="rt-row_callsign">{{ c.callsign }}</span>
                 <span class="rt-row_sub">{{ c.name }}</span>
               </span>
-              <span class="rt-row_trail vr-mono">{{ c.frequency }}</span>
+               <span class="rt-row_trail vr-mono">{{ formatFrequency(c.frequency) }}</span>
             </button>
           </li>
         </ul>

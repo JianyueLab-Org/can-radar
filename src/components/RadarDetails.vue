@@ -23,6 +23,7 @@ import {
   distanceNm,
   facilityColor,
   flightLevel,
+  formatFrequency,
   hasPosition,
   isOnGround,
   parseFeedTime,
@@ -175,7 +176,7 @@ const controllerRows = computed(() => {
           },
         ]
       : []),
-    { label: t("details.frequency"), value: c.frequency },
+    { label: t("details.frequency"), value: formatFrequency(c.frequency) },
     { label: t("details.member"), value: `${c.name} (${c.cid})` },
     {
       label: t("details.rating"),

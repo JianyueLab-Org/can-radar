@@ -17,7 +17,7 @@ export interface AtisSectors {
   extending: string[];
 }
 
-const COVERING = /^\s*covering\s+sectors?\s*[-–—:]\s*(.*)$/i;
+const COVERING = /^\s*covering(?:\s+sectors?)?\s*[-–—:]\s*(.*)$/i;
 const EXTENDING = /^\s*extending(?:\s+sectors?)?\s*[-–—:]\s*(.*)$/i;
 
 /** 频率、孤立的 EXT，不是扇区短名也不是机场。 */
