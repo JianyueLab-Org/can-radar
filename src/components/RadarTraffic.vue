@@ -197,7 +197,9 @@ function pilotKey(pilot: Pilot): string {
                 <span class="rt-row_callsign">{{ c.callsign }}</span>
                 <span class="rt-row_sub">{{ c.name }}</span>
               </span>
-               <span class="rt-row_trail vr-mono">{{ formatFrequency(c.frequency) }}</span>
+              <span class="rt-row_trail vr-mono">{{
+                formatFrequency(c.frequency)
+              }}</span>
             </button>
           </li>
         </ul>

@@ -174,7 +174,9 @@ const sections = computed<InfoPopupSection[]>(() => {
               }}
             </span>
             <span class="ra-item_callsign">{{ station.callsign }}</span>
-            <span class="ra-item_trail vr-mono">{{ formatFrequency(station.frequency) }}</span>
+            <span class="ra-item_trail vr-mono">{{
+              formatFrequency(station.frequency)
+            }}</span>
           </button>
         </li>
       </ul>

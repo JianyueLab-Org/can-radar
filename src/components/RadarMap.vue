@@ -221,7 +221,9 @@ type TrailPoint = [lat: number, lon: number, altitude: number];
  * jump more than half a world. Values above 180 are intentional; Leaflet can
  * project them into the adjacent wrapped world and the shape remains whole.
  */
-function isGeoJsonPosition(value: unknown): value is [number, number, ...number[]] {
+function isGeoJsonPosition(
+  value: unknown,
+): value is [number, number, ...number[]] {
   return (
     Array.isArray(value) &&
     typeof value[0] === "number" &&
@@ -535,7 +537,7 @@ function tagIcon(
     .map(
       (
         chip,
-       ) => `<span class="radar-tag__chip${chip.key === selectedKey ? " is-selected" : ""}"
+      ) => `<span class="radar-tag__chip${chip.key === selectedKey ? " is-selected" : ""}"
            data-key="${escapeHtml(chip.key)}"
            title="${escapeHtml(chip.frequency ? `${chip.label} ${chip.frequency}` : chip.label)}"
            style="background:${facilityColor(chip.facility)}"
@@ -1508,12 +1510,7 @@ function syncSectorTags() {
         if (drawn.has(markerId) || boundaryId === home) continue;
         const centre = boundaryCentre(boundaryId);
         if (!centre) continue;
-        placeSectorTag(
-          markerId,
-          [controller],
-          centre,
-          drawn,
-        );
+        placeSectorTag(markerId, [controller], centre, drawn);
       }
     }
   }

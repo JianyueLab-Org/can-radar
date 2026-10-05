@@ -214,7 +214,9 @@ export function facilityColor(facility: number): string {
  * Keep the feed's precision when it is useful, but make the common VATSIM
  * spelling stable so two positions can be compared at a glance.
  */
-export function formatFrequency(value: string | number | null | undefined): string {
+export function formatFrequency(
+  value: string | number | null | undefined,
+): string {
   const text = String(value ?? "").trim();
   if (!text) return "—";
 
