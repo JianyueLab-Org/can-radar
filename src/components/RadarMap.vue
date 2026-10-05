@@ -212,16 +212,7 @@ let resizeObserver: ResizeObserver | null = null;
 /** A recorded position: where, and how high. */
 type TrailPoint = [lat: number, lon: number, altitude: number];
 
-/**
- * Leaflet does not apply an OpenLayers-style `wrapX` to GeoJSON polygons.
- * Consequently a ring written as `179, -179` is interpreted as a line across
- * almost the entire world instead of the short line across the date line.
- *
- * VATSIM Radar keeps the geometry continuous before it renders it. Do the same
- * here: unwrap every linear path independently so consecutive longitudes never
- * jump more than half a world. Values above 180 are intentional; Leaflet can
- * project them into the adjacent wrapped world and the shape remains whole.
- */
+/** Leaflet does not split GeoJSON polygons at the international date line. */
 function isGeoJsonPosition(
   value: unknown,
 ): value is [number, number, ...number[]] {
@@ -232,26 +223,72 @@ function isGeoJsonPosition(
   );
 }
 
-function unwrapGeoJsonPath(path: unknown[]): unknown[] {
+type GeoPosition = [lon: number, lat: number, ...rest: number[]];
+
+function unwrapGeoJsonPath(path: GeoPosition[]): GeoPosition[] {
   let previous: number | null = null;
 
   return path.map((value) => {
-    if (!isGeoJsonPosition(value)) return value;
-
     let longitude = value[0];
     if (previous !== null) {
       while (longitude - previous > 180) longitude -= 360;
       while (longitude - previous < -180) longitude += 360;
     }
     previous = longitude;
-    return [longitude, ...value.slice(1)];
+    return [longitude, ...value.slice(1)] as GeoPosition;
   });
 }
 
-function unwrapGeoJsonCoordinates(value: unknown): unknown {
-  if (!Array.isArray(value) || value.length === 0) return value;
-  if (isGeoJsonPosition(value[0])) return unwrapGeoJsonPath(value);
-  return value.map(unwrapGeoJsonCoordinates);
+function clipRing(
+  ring: GeoPosition[],
+  minimum: number,
+  maximum: number,
+): GeoPosition[] {
+  const clip = (input: GeoPosition[], edge: number, keepGreater: boolean) => {
+    const output: GeoPosition[] = [];
+    for (let index = 0; index < input.length; index++) {
+      const from = input[index]!;
+      const to = input[(index + 1) % input.length]!;
+      const fromInside = keepGreater ? from[0] >= edge : from[0] <= edge;
+      const toInside = keepGreater ? to[0] >= edge : to[0] <= edge;
+
+      if (fromInside !== toInside && to[0] !== from[0]) {
+        const ratio = (edge - from[0]) / (to[0] - from[0]);
+        output.push([edge, from[1] + (to[1] - from[1]) * ratio]);
+      }
+      if (toInside) output.push(to);
+    }
+    return output;
+  };
+
+  const clipped = clip(clip(ring, minimum, true), maximum, false);
+  if (clipped.length < 3) return [];
+  const closed = [...clipped, clipped[0]!];
+  return closed;
+}
+
+function splitPolygon(polygon: unknown[]): unknown[][][] {
+  const rings = polygon.filter((ring): ring is unknown[] =>
+    Array.isArray(ring),
+  );
+  const unwrapped = rings.map((ring) =>
+    unwrapGeoJsonPath(ring.filter(isGeoJsonPosition) as GeoPosition[]),
+  );
+  const pieces: unknown[][][] = [];
+
+  for (const [minimum, maximum, offset] of [
+    [-180, 180, 0],
+    [180, 540, -360],
+  ] as const) {
+    const clipped = unwrapped
+      .map((ring) => clipRing(ring, minimum, maximum))
+      .filter((ring) => ring.length)
+      .map((ring) =>
+        ring.map(([lon, lat, ...rest]) => [lon + offset, lat, ...rest]),
+      );
+    if (clipped.length) pieces.push(clipped);
+  }
+  return pieces;
 }
 
 function unwrapGeoJsonFeature(feature: GeoJSON.Feature): GeoJSON.Feature {
@@ -260,12 +297,23 @@ function unwrapGeoJsonFeature(feature: GeoJSON.Feature): GeoJSON.Feature {
     | null;
   if (!geometry || !("coordinates" in geometry)) return feature;
 
+  if (geometry.type !== "Polygon" && geometry.type !== "MultiPolygon") {
+    return feature;
+  }
+
+  const polygons =
+    geometry.type === "Polygon"
+      ? splitPolygon(geometry.coordinates as unknown[])
+      : (geometry.coordinates as unknown[]).flatMap((polygon) =>
+          splitPolygon(polygon as unknown[]),
+        );
+
   return {
     ...feature,
     geometry: {
-      ...geometry,
-      coordinates: unwrapGeoJsonCoordinates(geometry.coordinates),
-    } as GeoJSON.Geometry,
+      type: "MultiPolygon",
+      coordinates: polygons,
+    } as GeoJSON.MultiPolygon,
   };
 }
 
