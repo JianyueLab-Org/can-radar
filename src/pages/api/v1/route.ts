@@ -1,6 +1,7 @@
 import type { APIContext } from "astro";
 
 import { apiOrigin } from "@/server/config";
+import { isPublicRoute, publicProxyCache } from "@/server/publicProxyCache";
 import { LIMITS, clientIp, enforce } from "@/server/rateLimit";
 
 /**
@@ -41,31 +42,9 @@ export const GET = async (context: APIContext) => {
     if (value) params.set(key, value);
   }
 
-  let response: Response;
-  try {
-    response = await fetch(`${UPSTREAM}/api/v1/route?${params}`, {
-      headers: { Accept: "application/json" },
-      // 上游卡住时不能把这个请求一起拖住 —— 地图上是一条画不出来的航路，
-      // 不是整张图打不开。解析比查航迹重，超时给得宽一点。
-      signal: AbortSignal.timeout(10000),
-    });
-  } catch {
-    return Response.json(
-      { status: 502, error: "上游没有响应。" },
-      { status: 502 },
-    );
-  }
-
-  const body = await response.text();
-  return new Response(body, {
-    status: response.status,
-    headers: {
-      "Content-Type":
-        response.headers.get("content-type") ?? "application/json",
-      // 同一条航路在一个 AIRAC 周期内不变，但航路串会跟着飞行计划改，改完要
-      // 立刻看到新的线 —— 所以只缓存很短一段，够挡住「选着一架飞机不动」的重复
-      // 查询就行。
-      "Cache-Control": response.ok ? "public, max-age=30" : "no-store",
-    },
+  return publicProxyCache.fetch(`${UPSTREAM}/api/v1/route?${params}`, {
+    ttlSeconds: 30,
+    timeoutMs: 10000,
+    validate: isPublicRoute,
   });
 };

@@ -31,8 +31,8 @@ export const LIMITS = {
    *  注意这条路由在本站是个**代理**：真正读 flightPosition 的是 can-web，这
    *  一桶挡的是打到我们这儿来的量，can-web 那边还有它自己的一桶。 */
   track: { limit: 240, windowMs: HOUR },
-  /** 把已提交的航路解析成坐标。按 IP 计，同样不需要登录；重复的问题由进程内
-   *  的缓存回答，所以这一桶只需要限制「问新航路」的速度。 */
+  /** Public route lookups. Every request counts, including cache hits;
+   *  the process-local cache separately reduces upstream requests. */
   routeResolve: { limit: 240, windowMs: HOUR },
   /** 机场天气。按 IP 计。这一桶比航迹松：一份 METAR 半小时才换一次，而它前面
    *  还有一层短缓存，所以真正打到上游的次数远小于这里的数字。 */
