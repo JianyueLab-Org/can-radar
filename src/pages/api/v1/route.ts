@@ -26,8 +26,8 @@ import { LIMITS, clientIp, enforce } from "@/server/rateLimit";
 
 const UPSTREAM = apiOrigin();
 
-/** 只放行认识的查询参数，原样带过去。 */
-const PASS_THROUGH = ["departure", "arrival", "route"] as const;
+/** 只放行认识的查询参数，并按 can-api 的解析规则构造规范键。 */
+const MAX_ROUTE_LENGTH = 1500;
 
 export const GET = async (context: APIContext) => {
   const limited = enforce([
@@ -36,11 +36,14 @@ export const GET = async (context: APIContext) => {
   if (limited) return limited;
 
   const incoming = context.url.searchParams;
+  const departure = incoming.get("departure")?.trim().toUpperCase() ?? "";
+  const arrival = incoming.get("arrival")?.trim().toUpperCase() ?? "";
+  const routeValue = incoming.get("route")?.trim() ?? "";
+  const route = routeValue.slice(0, MAX_ROUTE_LENGTH);
   const params = new URLSearchParams();
-  for (const key of PASS_THROUGH) {
-    const value = incoming.get(key);
-    if (value) params.set(key, value);
-  }
+  if (departure) params.set("departure", departure);
+  if (arrival) params.set("arrival", arrival);
+  if (route) params.set("route", route);
 
   return publicProxyCache.fetch(`${UPSTREAM}/api/v1/route?${params}`, {
     ttlSeconds: 30,

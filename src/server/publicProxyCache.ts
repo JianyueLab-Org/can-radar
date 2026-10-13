@@ -47,36 +47,45 @@ export class PublicProxyCache {
 
   async fetch(url: string, options: ProxyOptions): Promise<Response> {
     // The complete fixed upstream URL is the key, including its query.
-    if (Buffer.byteLength(url) > this.limits.maxKeyBytes) {
-      return this.respond(await this.load(url, options));
-    }
-
-    const cached = this.entries.get(url);
-    if (cached) {
-      if (cached.expiresAt > this.now()) {
-        this.entries.delete(url);
-        this.entries.set(url, cached);
-        return this.respond(cached.response);
+    const cacheKeyAllowed = Buffer.byteLength(url) <= this.limits.maxKeyBytes;
+    if (cacheKeyAllowed) {
+      const cached = this.entries.get(url);
+      if (cached) {
+        if (cached.expiresAt > this.now()) {
+          this.entries.delete(url);
+          this.entries.set(url, cached);
+          return this.respond(cached.response);
+        }
+        this.remove(url);
       }
-      this.remove(url);
     }
 
     const pending = this.inFlight.get(url);
     if (pending) return this.respond(await pending);
 
-    // Overflow requests retain normal proxy behavior without retaining keys.
     if (this.inFlight.size >= this.limits.maxInFlight) {
-      return this.respond(await this.load(url, options));
+      return this.respond(this.failure());
     }
 
     const task = this.load(url, options)
       .then((response) => {
-        if (response.cacheable) this.store(url, response, options.ttlSeconds);
+        if (cacheKeyAllowed && response.cacheable) {
+          this.store(url, response, options.ttlSeconds);
+        }
         return response;
       })
       .finally(() => this.inFlight.delete(url));
     this.inFlight.set(url, task);
     return this.respond(await task);
+  }
+
+  private failure(): Snapshot {
+    return {
+      body: JSON.stringify({ status: 502, error: "上游没有响应。" }),
+      status: 502,
+      headers: { "Content-Type": "application/json" },
+      cacheable: false,
+    };
   }
 
   private respond(response: Snapshot): Response {
@@ -96,26 +105,16 @@ export class PublicProxyCache {
         signal: AbortSignal.timeout(options.timeoutMs),
       });
     } catch {
-      const failure = Response.json(
-        { status: 502, error: "上游没有响应。" },
-        { status: 502 },
-      );
-      return {
-        body: await failure.text(),
-        status: failure.status,
-        headers: { "Content-Type": failure.headers.get("content-type")! },
-        cacheable: false,
-      };
+      return this.failure();
     }
 
-    // A body-read failure rejects all current waiters and is never retained.
-    const body = await response.text();
+    const body = await this.readBody(response);
+    if (body === null) return this.failure();
     const contentType =
       response.headers.get("content-type") ?? "application/json";
     let cacheable = false;
     if (
       response.ok &&
-      Buffer.byteLength(body) <= this.limits.maxBodyBytes &&
       /^application\/json\s*(?:;|$)/i.test(contentType) &&
       !response.headers.has("set-cookie") &&
       !response.headers.has("www-authenticate") &&
@@ -138,8 +137,7 @@ export class PublicProxyCache {
       status: response.status,
       headers: {
         "Content-Type": contentType,
-        // These explicit public endpoints already override upstream no-store.
-        "Cache-Control": response.ok
+        "Cache-Control": cacheable
           ? `public, max-age=${options.ttlSeconds}`
           : "no-store",
       },
@@ -147,6 +145,33 @@ export class PublicProxyCache {
     };
   }
 
+  private async readBody(response: Response): Promise<string | null> {
+    if (!response.body) return "";
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let bytes = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        bytes += value.byteLength;
+        if (bytes > this.limits.maxBodyBytes) {
+          await reader.cancel();
+          return null;
+        }
+        chunks.push(value);
+      }
+    } finally {
+      reader.releaseLock();
+    }
+    const body = new Uint8Array(bytes);
+    let offset = 0;
+    for (const chunk of chunks) {
+      body.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return new TextDecoder().decode(body);
+  }
   private remove(key: string): void {
     const entry = this.entries.get(key);
     if (entry) {

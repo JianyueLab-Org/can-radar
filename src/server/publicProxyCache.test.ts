@@ -227,10 +227,11 @@ describe("public proxy cache", () => {
     }
   });
 
-  test("oversized UTF-8 keys bypass cache and singleflight", async () => {
+  test("oversized UTF-8 keys still coalesce and obey the in-flight bound", async () => {
     const url = "https://api.test/天气";
     const cache = new PublicProxyCache({
       maxKeyBytes: Buffer.byteLength(url) - 1,
+      maxInFlight: 1,
     });
     const { promise, resolve } = Promise.withResolvers<void>();
     stub(async () => {
@@ -239,32 +240,70 @@ describe("public proxy cache", () => {
     });
     const first = cache.fetch(url, options);
     const second = cache.fetch(url, options);
-    expect(calls).toHaveLength(2);
+    expect(calls).toHaveLength(1);
     resolve();
     await Promise.all([first, second]);
     await cache.fetch(url, options);
-    expect(calls).toHaveLength(3);
+    expect(calls).toHaveLength(2);
   });
 
-  test("bounds active singleflight keys, keeps admitted coalescing, and releases capacity", async () => {
+  test("bounds actual upstream requests and releases capacity", async () => {
     const cache = new PublicProxyCache({ maxInFlight: 1 });
     const { promise, resolve } = Promise.withResolvers<void>();
     stub(async () => {
       await promise;
       return Response.json(ROUTE);
     });
-    const requests = [
-      cache.fetch("https://api.test/a", options),
-      cache.fetch("https://api.test/a", options),
-      cache.fetch("https://api.test/b", options),
-      cache.fetch("https://api.test/b", options),
-    ];
-    expect(calls).toHaveLength(3);
+    const first = cache.fetch("https://api.test/a", options);
+    const joined = cache.fetch("https://api.test/a", options);
+    const overflow = await cache.fetch("https://api.test/b", options);
+    expect(calls).toHaveLength(1);
+    expect(overflow.status).toBe(502);
+    expect(await overflow.json()).toEqual({
+      status: 502,
+      error: "上游没有响应。",
+    });
     resolve();
-    await Promise.all(requests);
+    await Promise.all([first, joined]);
+    expect((await cache.fetch("https://api.test/b", options)).status).toBe(200);
     await cache.fetch("https://api.test/b", options);
-    await cache.fetch("https://api.test/b", options);
-    expect(calls).toHaveLength(4);
+    expect(calls).toHaveLength(2);
+  });
+
+  test("stops reading an oversized streamed body and returns the proxy failure", async () => {
+    const cache = new PublicProxyCache({ maxBodyBytes: 8 });
+    let pulls = 0;
+    let cancelled = false;
+    stub(
+      () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            pull(controller) {
+              pulls++;
+              if (pulls === 1) {
+                controller.enqueue(new TextEncoder().encode("12345678"));
+              } else if (pulls === 2) {
+                controller.enqueue(new TextEncoder().encode("9"));
+              } else {
+                controller.enqueue(new Uint8Array(1024));
+              }
+            },
+            cancel() {
+              cancelled = true;
+            },
+          }),
+          { headers: { "Content-Type": "application/json" } },
+        ),
+    );
+
+    const response = await cache.fetch("https://api.test/oversized", options);
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({
+      status: 502,
+      error: "上游没有响应。",
+    });
+    expect(cancelled).toBe(true);
+    expect(pulls).toBeLessThanOrEqual(3);
   });
 
   test.each([400, 401, 429, 500, 503])(
@@ -392,11 +431,12 @@ describe("public proxy cache", () => {
     { "Cache-Control": 'private="Cookie"' },
     { "Content-Type": "text/html" },
   ])(
-    "does not retain credential-dependent or non-JSON responses %j",
+    "rejects public caching after upstream cache-safety rejection %j",
     async (headers) => {
       const cache = new PublicProxyCache();
       stub(() => Response.json(ROUTE, { headers }));
-      await cache.fetch("https://api.test/route", options);
+      const first = await cache.fetch("https://api.test/route", options);
+      expect(first.headers.get("Cache-Control")).toBe("no-store");
       await cache.fetch("https://api.test/route", options);
       expect(calls).toHaveLength(2);
     },
@@ -458,22 +498,23 @@ describe("METAR and route proxy integration", () => {
     expect(calls).toHaveLength(0);
   });
 
-  test("route keys include exact forwarded values in fixed order only", async () => {
+  test("route keys use the resolver's normalized input in fixed order only", async () => {
     const departure = freshIcao();
+    const longRoute = `${"A".repeat(1500)}DISCARDED`;
     stub(() => Response.json(ROUTE));
-    await route(
-      context(
-        `/api/v1/route?route=Fix++DCT&arrival=ZSPD&departure=${departure}&ignored=1`,
-      ),
-    );
-    await route(
-      context(
-        `/api/v1/route?departure=${departure}&arrival=ZSPD&route=Fix%20%20DCT&ignored=2`,
-      ),
-    );
-    expect(calls).toHaveLength(1);
+    for (const path of [
+      `/api/v1/route?route=%20Fix++DCT%20&arrival=%20zspd%20&departure=%20${departure.toLowerCase()}%20&ignored=1`,
+      `/api/v1/route?departure=${departure}&arrival=ZSPD&route=Fix%20%20DCT&ignored=2`,
+      `/api/v1/route?departure=${departure}&arrival=ZSPD&route=${longRoute}`,
+      `/api/v1/route?departure=${departure}&arrival=ZSPD&route=${"A".repeat(1500)}`,
+    ])
+      await route(context(path));
+    expect(calls).toHaveLength(2);
     expect(calls[0].url).toEndWith(
       `/api/v1/route?departure=${departure}&arrival=ZSPD&route=Fix++DCT`,
+    );
+    expect(calls[1].url).toEndWith(
+      `/api/v1/route?departure=${departure}&arrival=ZSPD&route=${"A".repeat(1500)}`,
     );
     for (const query of [
       `departure=${departure}&arrival=ZSPD&route=FIX++DCT`,
@@ -483,7 +524,7 @@ describe("METAR and route proxy integration", () => {
       `departure=${departure}&route=Fix++DCT`,
     ])
       await route(context(`/api/v1/route?${query}`));
-    expect(calls).toHaveLength(6);
+    expect(calls).toHaveLength(7);
     expect(calls[0].init.headers).toEqual({ Accept: "application/json" });
     expect(calls[0].init.credentials).toBe("omit");
   });
