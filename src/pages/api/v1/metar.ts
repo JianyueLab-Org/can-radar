@@ -1,6 +1,7 @@
 import type { APIContext } from "astro";
 
 import { apiOrigin } from "@/server/config";
+import { isPublicMetar, publicProxyCache } from "@/server/publicProxyCache";
 import { LIMITS, clientIp, enforce } from "@/server/rateLimit";
 
 /**
@@ -39,30 +40,9 @@ export const GET = async (context: APIContext) => {
     );
   }
 
-  let response: Response;
-  try {
-    response = await fetch(`${UPSTREAM}/api/v1/metar?icao=${icao}`, {
-      headers: { Accept: "application/json" },
-      // 上游卡住时不能把这个请求一起拖住 —— 机场面板上是一行取不到的天气，
-      // 不是整个面板打不开。
-      signal: AbortSignal.timeout(8000),
-    });
-  } catch {
-    return Response.json(
-      { status: 502, error: "上游没有响应。" },
-      { status: 502 },
-    );
-  }
-
-  const body = await response.text();
-  return new Response(body, {
-    status: response.status,
-    headers: {
-      "Content-Type":
-        response.headers.get("content-type") ?? "application/json",
-      "Cache-Control": response.ok
-        ? `public, max-age=${CACHE_SECONDS}`
-        : "no-store",
-    },
+  return publicProxyCache.fetch(`${UPSTREAM}/api/v1/metar?icao=${icao}`, {
+    ttlSeconds: CACHE_SECONDS,
+    timeoutMs: 8000,
+    validate: (payload) => isPublicMetar(payload, icao),
   });
 };
