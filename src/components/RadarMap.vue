@@ -1433,6 +1433,7 @@ function placeSectorTag(
   controllers: Controller[],
   centre: L.LatLng,
   drawn: Set<string>,
+  frequencyOverrides = new Map<string, string>(),
 ) {
   if (!controllers.length) return;
   const keys = controllers.map(atcKey);
@@ -1442,7 +1443,9 @@ function placeSectorTag(
     key: atcKey(controller),
     label: controller.callsign,
     facility: controller.facility,
-    frequency: formatFrequency(controller.frequency),
+    frequency: formatFrequency(
+      frequencyOverrides.get(atcKey(controller)) ?? controller.frequency,
+    ),
   }));
   const selectedKey: string | null = keys.includes(props.selected ?? "")
     ? (props.selected ?? null)
@@ -1467,6 +1470,26 @@ function placeSectorTag(
   }
 }
 
+/** Frequency attached to a Covering entry that owns this boundary, if any. */
+function coveringFrequencyForBoundary(
+  controller: Controller,
+  boundaryId: string,
+): string | undefined {
+  const parsed = parseAtisSectors(controller.text_atis);
+  if (!parsed.coveringEntries.some((entry) => entry.frequency))
+    return undefined;
+  const oceanic = prefersOceanic(controller.callsign);
+  for (const entry of parsed.coveringEntries) {
+    if (!entry.frequency) continue;
+    const ids = keysForBoundaryIds(
+      boundariesForSectorName(entry.name, controller.callsign),
+      oceanic,
+    );
+    if (ids.includes(boundaryId)) return entry.frequency;
+  }
+  return undefined;
+}
+
 /**
  * A tag on each staffed sector, so an en-route position is labelled the same
  * way an airport is rather than being a nameless green polygon. It sits at the
@@ -1483,10 +1506,23 @@ function syncSectorTags() {
     const centre = boundaryCentre(boundaryId);
     if (!centre) continue;
 
+    const frequencyOverrides = new Map<string, string>();
+    for (const controller of controllers) {
+      const frequency = coveringFrequencyForBoundary(controller, boundaryId);
+      if (frequency) frequencyOverrides.set(atcKey(controller), frequency);
+    }
     const visibleControllers = controllers.filter(
-      (controller) => !drawn.has(atcKey(controller)),
+      (controller) =>
+        frequencyOverrides.has(atcKey(controller)) ||
+        !drawn.has(atcKey(controller)),
     );
-    placeSectorTag(boundaryId, visibleControllers, centre, drawn);
+    placeSectorTag(
+      boundaryId,
+      visibleControllers,
+      centre,
+      drawn,
+      frequencyOverrides,
+    );
   }
 
   for (const controller of props.controllers) {
@@ -1495,8 +1531,9 @@ function syncSectorTags() {
     const oceanic = prefersOceanic(controller.callsign);
     const primary = atcKey(controller);
     const home = airspaceKeysFor(controller)[0];
-    for (const name of parseAtisSectors(controller.text_atis).extending) {
-      const callsign = extendedCallsign(controller.callsign, name);
+    for (const entry of parseAtisSectors(controller.text_atis)
+      .extendingEntries) {
+      const callsign = extendedCallsign(controller.callsign, entry.name);
       if (!callsign) continue;
       const taken = props.controllers.some(
         (other) =>
@@ -1511,7 +1548,16 @@ function syncSectorTags() {
         if (drawn.has(markerId) || boundaryId === home) continue;
         const centre = boundaryCentre(boundaryId);
         if (!centre) continue;
-        placeSectorTag(markerId, [controller], centre, drawn);
+        const frequencyOverrides = entry.frequency
+          ? new Map([[atcKey(controller), entry.frequency]])
+          : undefined;
+        placeSectorTag(
+          markerId,
+          [controller],
+          centre,
+          drawn,
+          frequencyOverrides,
+        );
       }
     }
   }

@@ -14,13 +14,20 @@ describe("parseAtisSectors", () => {
         "Covering sector - T30",
         "AIP levels - Area 1 SFC-UNL",
       ]),
-    ).toEqual({ covering: ["T30"], extending: [] });
+    ).toEqual({
+      covering: ["T30"],
+      extending: [],
+      coveringEntries: [{ name: "T30" }],
+      extendingEntries: [],
+    });
   });
 
   test("accepts CRC Covering Sectors and a list", () => {
     expect(parseAtisSectors(["Covering Sectors - T30, T31 T32"])).toEqual({
       covering: ["T30", "T31", "T32"],
       extending: [],
+      coveringEntries: [{ name: "T30" }, { name: "T31" }, { name: "T32" }],
+      extendingEntries: [],
     });
   });
 
@@ -28,6 +35,8 @@ describe("parseAtisSectors", () => {
     expect(parseAtisSectors(["Covering - BJE1 BJE"])).toEqual({
       covering: ["BJE1", "BJE"],
       extending: [],
+      coveringEntries: [{ name: "BJE1" }, { name: "BJE" }],
+      extendingEntries: [],
     });
   });
 
@@ -35,10 +44,14 @@ describe("parseAtisSectors", () => {
     expect(parseAtisSectors(["Extending - ZSSS"])).toEqual({
       covering: [],
       extending: ["ZSSS"],
+      coveringEntries: [],
+      extendingEntries: [{ name: "ZSSS" }],
     });
     expect(parseAtisSectors(["Extending - ZSSS, ZSNJ"])).toEqual({
       covering: [],
       extending: ["ZSSS", "ZSNJ"],
+      coveringEntries: [],
+      extendingEntries: [{ name: "ZSSS" }, { name: "ZSNJ" }],
     });
   });
 
@@ -46,6 +59,8 @@ describe("parseAtisSectors", () => {
     expect(parseAtisSectors(["Extending - "])).toEqual({
       covering: [],
       extending: [],
+      coveringEntries: [],
+      extendingEntries: [],
     });
   });
 
@@ -55,13 +70,20 @@ describe("parseAtisSectors", () => {
         "Covering area - Ground movement area",
         "Extending N47 133.55",
       ]),
-    ).toEqual({ covering: [], extending: [] });
+    ).toEqual({
+      covering: [],
+      extending: [],
+      coveringEntries: [],
+      extendingEntries: [],
+    });
   });
 
   test("drops a trailing frequency", () => {
     expect(parseAtisSectors(["Covering Sectors - T30 127.500"])).toEqual({
       covering: ["T30"],
       extending: [],
+      coveringEntries: [{ name: "T30", frequency: "127.500" }],
+      extendingEntries: [],
     });
   });
 
@@ -72,7 +94,31 @@ describe("parseAtisSectors", () => {
         "Tokyo Control / Tokyo Kontororu (JA)",
         "Covering sectors - T30",
       ]),
-    ).toEqual({ covering: ["T30"], extending: [] });
+    ).toEqual({
+      covering: ["T30"],
+      extending: [],
+      coveringEntries: [{ name: "T30" }],
+      extendingEntries: [],
+    });
+  });
+
+  test("keeps a frequency attached to each covering or extending entry", () => {
+    expect(
+      parseAtisSectors([
+        "Covering [BJN 133.025, BJS 127.350, BJW 128.100, BJE 120.350]",
+        "Extending - [ZBHH 133.700]",
+      ]),
+    ).toEqual({
+      covering: ["BJN", "BJS", "BJW", "BJE"],
+      extending: ["ZBHH"],
+      coveringEntries: [
+        { name: "BJN", frequency: "133.025" },
+        { name: "BJS", frequency: "127.350" },
+        { name: "BJW", frequency: "128.100" },
+        { name: "BJE", frequency: "120.350" },
+      ],
+      extendingEntries: [{ name: "ZBHH", frequency: "133.700" }],
+    });
   });
 });
 

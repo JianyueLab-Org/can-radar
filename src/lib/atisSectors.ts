@@ -15,10 +15,18 @@
 export interface AtisSectors {
   covering: string[];
   extending: string[];
+  coveringEntries: AtisSectorEntry[];
+  extendingEntries: AtisSectorEntry[];
 }
 
-const COVERING = /^\s*covering(?:\s+sectors?)?\s*[-–—:]\s*(.*)$/i;
-const EXTENDING = /^\s*extending(?:\s+sectors?)?\s*[-–—:]\s*(.*)$/i;
+export interface AtisSectorEntry {
+  name: string;
+  frequency?: string;
+}
+
+const COVERING = /^\s*covering(?:\s+sectors?)?\s*(?:[-–—:]|\[)\s*(.*?)\]?\s*$/i;
+const EXTENDING =
+  /^\s*extending(?:\s+sectors?)?\s*(?:[-–—:]|\[)\s*(.*?)\]?\s*$/i;
 
 /** 频率、孤立的 EXT，不是扇区短名也不是机场。 */
 function isNoiseToken(token: string): boolean {
@@ -26,19 +34,42 @@ function isNoiseToken(token: string): boolean {
   return /^\d{2,3}(\.\d{1,3})?$/.test(token);
 }
 
-function splitNames(rest: string): string[] {
-  const names: string[] = [];
-  for (const part of rest.split(/[,;/]+|\s+/)) {
-    const token = part.trim().toUpperCase();
-    if (!token || isNoiseToken(token)) continue;
-    if (!names.includes(token)) names.push(token);
+function isFrequency(token: string): boolean {
+  return /^\d{2,3}\.\d{1,3}$/.test(token);
+}
+
+function parseEntries(rest: string): AtisSectorEntry[] {
+  const entries: AtisSectorEntry[] = [];
+  for (const segment of rest.replace(/[\[\]()]/g, " ").split(/[,;/]+/)) {
+    const tokens = segment.trim().split(/\s+/).filter(Boolean);
+    const frequency =
+      tokens.at(-1) && isFrequency(tokens.at(-1)!) ? tokens.pop() : undefined;
+    for (const raw of tokens) {
+      const name = raw.trim().toUpperCase();
+      if (
+        !name ||
+        isNoiseToken(name) ||
+        entries.some((entry) => entry.name === name)
+      )
+        continue;
+      entries.push({ name, ...(frequency ? { frequency } : {}) });
+    }
   }
-  return names;
+  return entries;
 }
 
 function merge(into: string[], names: string[]) {
   for (const name of names) {
     if (!into.includes(name)) into.push(name);
+  }
+}
+
+function mergeEntries(into: AtisSectorEntry[], entries: AtisSectorEntry[]) {
+  for (const entry of entries) {
+    const existing = into.find((item) => item.name === entry.name);
+    if (!existing) into.push(entry);
+    else if (!existing.frequency && entry.frequency)
+      existing.frequency = entry.frequency;
   }
 }
 
@@ -52,18 +83,32 @@ export function parseAtisSectors(
 ): AtisSectors {
   const covering: string[] = [];
   const extending: string[] = [];
+  const coveringEntries: AtisSectorEntry[] = [];
+  const extendingEntries: AtisSectorEntry[] = [];
 
   for (const raw of lines ?? []) {
     const coveringMatch = COVERING.exec(raw);
     if (coveringMatch) {
-      merge(covering, splitNames(coveringMatch[1] ?? ""));
+      const entries = parseEntries(coveringMatch[1] ?? "");
+      merge(
+        covering,
+        entries.map((entry) => entry.name),
+      );
+      mergeEntries(coveringEntries, entries);
       continue;
     }
     const extendingMatch = EXTENDING.exec(raw);
-    if (extendingMatch) merge(extending, splitNames(extendingMatch[1] ?? ""));
+    if (extendingMatch) {
+      const entries = parseEntries(extendingMatch[1] ?? "");
+      merge(
+        extending,
+        entries.map((entry) => entry.name),
+      );
+      mergeEntries(extendingEntries, entries);
+    }
   }
 
-  return { covering, extending };
+  return { covering, extending, coveringEntries, extendingEntries };
 }
 
 /**
