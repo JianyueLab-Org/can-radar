@@ -31,6 +31,7 @@ import { ICP_FILING } from "@jianyuelab-org/can-ui/sites";
 import { airportAt, loadAirports, loadedAirports } from "@/lib/airports";
 import { loadAirportCodes, stationField } from "@/lib/airportCodes";
 import { getFacilityName, ownsAirspace } from "@/lib/facilities";
+import { RADAR_MAP_WORLD_OPTIONS } from "@/lib/radarMapOptions";
 import {
   allowsExtending,
   extendedCallsign,
@@ -2294,6 +2295,7 @@ onMounted(async () => {
     // 的控件是一块白色圆角，和这套近黑的设计对不上，两套按钮并排更难看。
     zoomControl: false,
     preferCanvas: true,
+    ...RADAR_MAP_WORLD_OPTIONS,
     // Keep the world inside the frame vertically: no dragging the map off the
     // top or bottom to leave a band of page showing.
     maxBounds: L.latLngBounds(
