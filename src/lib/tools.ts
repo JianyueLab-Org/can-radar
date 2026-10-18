@@ -112,20 +112,3 @@ export function ratingTrans(
       }
   }
 }
-
-const divisionRegionMap: Record<string, string> = {
-  "1": "PRC",
-  "2": "USA",
-  "3": "JPN",
-  "4": "HK",
-};
-
-/**
- * 根据分部区域代码获取英文简称
- * @param regionCode - 分部区域代码 (1, 2, 3, 4)
- * @returns 英文简称 (PRC, USA, JPN, HK)
- */
-export function divisionTrans(regionCode: string | number): string {
-  const codeStr = regionCode.toString();
-  return divisionRegionMap[codeStr] || "Unknown";
-}
