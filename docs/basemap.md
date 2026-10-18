@@ -16,6 +16,8 @@ can-database 的 `src/lib/mapBase.ts` 有第二份拷贝，两边要一起改。
 | 浅色 | Esri `Canvas/World_Light_Gray_Base` | z16    |
 | 卫星 | Esri `World_Imagery`                | z19+   |
 
+深浅两套在 `globals.css` 里加了一层滤镜，拉向 can-ui 的面色；卫星图不加。
+
 三张都在 `server.arcgisonline.com`，免 key，`{z}/{y}/{x}` 顺序（**注意 y 在 x 前
 面**，和常见的 XYZ 相反），没有 `{s}` 子域也没有 `{r}` 高清后缀。
 

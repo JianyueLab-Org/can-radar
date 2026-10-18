@@ -148,7 +148,7 @@ function onClick(event: MouseEvent) {
   background: var(--surface-overlay);
 }
 .vr-btn--secondary-black:hover:not(:disabled) {
-  background: var(--surface-overlay);
+  background: color-mix(in srgb, var(--color-ink) 8%, var(--surface-overlay));
   color: var(--color-ink);
 }
 .vr-btn--secondary-black:active:not(:disabled) {

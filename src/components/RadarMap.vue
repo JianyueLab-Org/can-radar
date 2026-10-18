@@ -194,6 +194,28 @@ function tileUrl(): string {
   }
 }
 
+/** 当前底图对应的容器类，globals.css 按它给瓦片加滤镜。 */
+function basemapClass(): string {
+  const key =
+    props.settings.basemap === "satellite"
+      ? "satellite"
+      : props.settings.basemap === "auto"
+        ? props.theme
+        : props.settings.basemap;
+  return `radar-basemap-${key}`;
+}
+
+function applyBasemapClass() {
+  const el = mapContainer.value;
+  if (!el) return;
+  el.classList.remove(
+    "radar-basemap-dark",
+    "radar-basemap-light",
+    "radar-basemap-satellite",
+  );
+  el.classList.add(basemapClass());
+}
+
 const mapContainer = ref<HTMLDivElement | null>(null);
 
 let map: L.Map | null = null;
@@ -2166,6 +2188,7 @@ watch(
       tileLayer.options.maxNativeZoom = tileMaxNativeZoom();
       tileLayer.setUrl(tileUrl());
     }
+    applyBasemapClass();
     applyLayerVisibility();
   },
 );
@@ -2314,6 +2337,7 @@ onMounted(async () => {
   });
   resizeObserver.observe(mapContainer.value);
 
+  applyBasemapClass();
   tileLayer = L.tileLayer(tileUrl(), {
     // The airspace credits are not decoration: VATSpy's data is CC BY-SA 4.0,
     // which requires attribution wherever it is shown. The basemap half is the
@@ -2484,6 +2508,7 @@ watch(
   () => props.theme,
   (theme) => {
     if (tileLayer) tileLayer.setUrl(tileUrl());
+    applyBasemapClass();
     rescaleIcons();
     drawTrail();
     drawRoute();

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { arc } from "@/lib/radar";
+import { AREA_COLORS, ROUTE_COLORS, arc } from "@/lib/radar";
 
 describe("arc across the antimeridian", () => {
   test("unwraps a short leg", () => {
@@ -39,5 +39,14 @@ describe("arc across the antimeridian", () => {
     for (let i = 1; i < run.length; i++) {
       expect(Math.abs(run[i][1] - run[i - 1][1])).toBeLessThan(180);
     }
+  });
+});
+
+describe("地图向量色跟着 can-ui 的记号", () => {
+  test("空闲管制区是边框色", () => {
+    expect(AREA_COLORS.idle).toEqual({ dark: "#2c3a48", light: "#b8c2cc" });
+  });
+  test("航路线是次要文字色", () => {
+    expect(ROUTE_COLORS).toEqual({ dark: "#8a97a4", light: "#4f5b67" });
   });
 });

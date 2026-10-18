@@ -282,6 +282,10 @@ canvas 的 `strokeStyle` 不认 CSS 自定义属性，`var(--color-muted)` 传�
 放在 `lib/radar.ts` 而不是地图组件里，是因为**设置里的图例要用同一批值**。两边
 各写一份色号，是那种改了一边、另一边悄悄开始说谎的东西。
 
+`AREA_COLORS.idle` 和 `ROUTE_COLORS` 抄的是 can-ui 的 `--border-strong` 和
+`--color-muted`（深 / 浅），色号随 can-ui 升级时要对一遍。瓦片层在 `globals.css`
+里按底图加了滤镜（容器类 `radar-basemap-dark|light|satellite`，卫星不加）。
+
 `AREA_COLORS.idle` 跟主题走，所以主题的 watch 里要调 `syncBoundaries()` 重新
 上色。
 
