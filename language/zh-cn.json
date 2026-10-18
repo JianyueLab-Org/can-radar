@@ -1,14 +1,9 @@
 {
   "header": {
-    "onlineMap": "雷达",
     "signIn": "登录",
     "signOut": "退出登录",
     "signingOut": "正在退出…",
     "signOutFailed": "退出失败，请重试。",
-    "panel": "飞行员面板",
-    "roster": "管制员名册",
-    "activities": "活动",
-    "downloads": "下载",
     "skipToContent": "跳到主要内容",
     "openMenu": "打开菜单",
     "openSidebar": "打开导航",
@@ -196,5 +191,11 @@
       "zh": "中文",
       "en": "英语"
     }
+  },
+  "notFound": {
+    "code": "404",
+    "title": "页面不存在",
+    "description": "地址可能有误，或这一页已经移走。",
+    "home": "返回雷达"
   }
 }

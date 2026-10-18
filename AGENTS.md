@@ -32,7 +32,7 @@ bun run build && bun run start
 **3. `radarTypes.ts` 是拷贝，两边都在用。** can-web 还要同一份数据源形状。改
 它之前记得那边也有一份；真正防漂移的是 can-fsd 的 `datafeed_golden.json`。
 
-**4. 页眉链接要走 `site()`。** 这里是另一个源，写 `href="/roster"` 会打在
+**4. 链到主站的地址要拼 `siteOrigin`。** 这里是另一个源，写 `href="/roster"` 会打在
 radar.ceruleanavi.net 上然后 404。`siteOrigin` 默认指向主站。
 
 **5. 这个站点认得出会话，但没有登录。** 两句话都要成立，缺一句就会有人写错东西。
@@ -129,9 +129,11 @@ Mono，以及**浮在整屏地图上的一摞卡片**取代原来的三栏。
 另外 `vr-theme.css` 里针对版权条的几条带 `:root` 前缀，是为了压过 globals.css
 里 `.dark .leaflet-control-attribution` 那一档权重。
 
-**站头是 can-ui `CanFrame` 的 `map` 布局**（56px、只有一条底边、选中项在下沿画
-2px），外壳在 `src/components/Frame.vue`。`actions` 插槽空着：地图控件在
-`Radar.vue` 里，和地图状态在同一个岛屿。
+**站头是 can-ui `CanFrame` 的 `map` 布局**（56px 顶栏、只有一条底边），外壳在
+`src/components/Frame.vue`。**没有本地导航**（`nav` 为空，规格如此）：其余站点由
+网络切换器承载。品牌链到本站根 `/`，登出整页重载。`actions` 插槽空着：地图控件在
+`Radar.vue` 里，和地图状态在同一个岛屿。页面标题由 `src/lib/pageTitle.ts` 拼
+（`<页面> · <站名>`，首页只有站名）。
 
 **浮层分两栏，分工是「我在看谁」和「网络上有谁」。** 左边只有一张卡：选中的飞机
 或席位（`RadarDetails`）。右边是名单那一摞：机场卡（`RadarAirport`）、交通列表

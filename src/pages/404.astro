@@ -1,0 +1,47 @@
+---
+/**
+ * 404。外壳照常（地图站的 `map` 布局），版式照主站的 404：大号代码、标题、
+ * 一句说明、一个回首页的按钮。
+ */
+import BaseLayout from "@/layouts/BaseLayout.astro";
+import Frame from "@/components/Frame.vue";
+import { getLocale, getMessages } from "@/lib/i18n";
+import { signInUrl, webOrigin } from "@/server/config";
+import { readMember } from "@/server/session";
+
+const locale = getLocale(Astro.cookies);
+const t = getMessages(locale, "notFound") as Record<string, string>;
+const member = await readMember(Astro);
+if (member) Astro.response.headers.set("Cache-Control", "private, no-store");
+---
+
+<BaseLayout title={t.title} floatingControls={false}>
+  <Frame
+    messages={getMessages(locale, "header")}
+    locale={locale}
+    pathname={Astro.url.pathname}
+    member={member}
+    siteOrigin={webOrigin()}
+    signInHref={signInUrl(Astro.url)}
+    client:load
+  >
+    <div class="flex min-h-full items-center justify-center px-4 py-24">
+      <div class="mx-auto max-w-xl text-center">
+        <p
+          class="font-mono text-[7rem] font-bold leading-none tracking-tighter text-can/20 sm:text-[10rem]"
+        >
+          {t.code}
+        </p>
+        <h1
+          class="-mt-6 text-3xl font-bold tracking-tight text-ink sm:text-4xl"
+        >
+          {t.title}
+        </h1>
+        <p class="mx-auto mt-4 max-w-md text-muted">{t.description}</p>
+        <div class="mt-8 flex justify-center">
+          <a href="/" class="btn btn-primary px-5 py-2.5">{t.home}</a>
+        </div>
+      </div>
+    </div>
+  </Frame>
+</BaseLayout>

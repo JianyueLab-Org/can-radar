@@ -36,8 +36,10 @@ import "@/styles/vr-theme.css";
 import ThemeScript from "@jianyuelab-org/can-ui/components/ThemeScript.astro";
 import { ThemeLangControls } from "@jianyuelab-org/can-ui";
 import { getLocale } from "@/lib/i18n";
+import { pageTitle } from "@/lib/pageTitle";
 
 interface Props {
+  /** 页面部分；完整标题由 `pageTitle()` 拼。首页不传。 */
   title?: string;
   description?: string;
   /**
@@ -48,12 +50,13 @@ interface Props {
 }
 
 const {
-  title = "Cerulean Aviation Network",
+  title,
   description = "A Friendly, Open, and Enthusiastic Flight Simulation Platform — Dedicated to Your Enjoyment",
   floatingControls = true,
 } = Astro.props;
 
 const locale = getLocale(Astro.cookies);
+const fullTitle = pageTitle(title, locale);
 ---
 
 <!doctype html>
@@ -64,10 +67,19 @@ const locale = getLocale(Astro.cookies);
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png" />
-    <title>{title}</title>
+    <title>{fullTitle}</title>
     <meta name="description" content={description} />
-    <meta name="theme-color" content="#4c92c1" />
-    <meta property="og:title" content={title} />
+    <meta
+      name="theme-color"
+      content="#ffffff"
+      media="(prefers-color-scheme: light)"
+    />
+    <meta
+      name="theme-color"
+      content="#0b0f14"
+      media="(prefers-color-scheme: dark)"
+    />
+    <meta property="og:title" content={fullTitle} />
     <meta property="og:description" content={description} />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="/logo-full.png" />
