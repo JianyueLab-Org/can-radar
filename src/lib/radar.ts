@@ -247,10 +247,10 @@ export const AREA_COLORS = {
    */
   active: FACILITY_COLORS[6],
   /**
-   * 没人管的管制区。取自 vatsim-radar 的 `mapSectorBorder`：全世界几百个 FIR
-   * 同时画出来是一张网，它的任务是「在那儿但别抢眼」。
+   * 没人管的管制区。思路取自 vatsim-radar 的 `mapSectorBorder`：全世界几百个 FIR
+   * 同时画出来是一张网，它的任务是「在那儿但别抢眼」。色值抄 can-ui
+   * `--border-strong`（深 / 浅）：canvas 读不了 CSS 变量。
    */
-  /** can-ui `--border-strong`（深 / 浅）。canvas 读不了 CSS 变量，这里抄色号。 */
   idle: { dark: "#2c3a48", light: "#b8c2cc" },
 } as const;
 

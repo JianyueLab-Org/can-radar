@@ -23,9 +23,10 @@
 }
 
 /* Esri 的深浅两套是中性灰，can-ui 的面是蓝黑 / 冷灰。滤镜把瓦片拉向记号色；
-   卫星图不动。 */
+   卫星图不动。深色下 brightness(0.38) 把陆地压到约 #171c23、水面约 #0c0f11，
+   贴近 --surface #0b0f14 / --surface-raised #111820，海岸线和边界仍看得见。 */
 .radar-basemap-dark .leaflet-tile-pane {
-  filter: brightness(0.82) sepia(0.25) hue-rotate(175deg) saturate(1.6);
+  filter: brightness(0.38) sepia(0.5) hue-rotate(180deg) saturate(2.4);
 }
 .radar-basemap-light .leaflet-tile-pane {
   filter: sepia(0.08) hue-rotate(175deg) saturate(1.2) brightness(1.02);
@@ -77,14 +78,12 @@
 }
 .vr-2b-medium {
   font-size: 14px;
-  font-weight: 600;
 }
 .vr-3b {
   font-size: 12px;
 }
 .vr-3b-medium {
   font-size: 12px;
-  font-weight: 600;
 }
 .vr-1b,
 .vr-2b,
@@ -227,6 +226,13 @@
   text-transform: uppercase;
 }
 
+/* 状态芯片（空中 / 地面）的底色是 --color-success / --color-muted，深色下是浅
+   色，白字过不了对比度；字色用 can-ui 的 on-can，和 VrBubble 的 success 一致。
+   席位色块仍是白字。 */
+.vr-chip--status {
+  color: var(--color-on-can);
+}
+
 /* ---------------------------------------------------------------------------
    Leaflet 里还在用的几件，用 can-ui 的记号重新定义一遍。地图底色和底图的色调
    不在这里。
@@ -240,10 +246,10 @@
 
 /* 版权条。
 
-   `:root` 那一层不是装饰 —— 上面从 can-web 搬来的那段里有
-   `.dark .leaflet-control-attribution { … !important }` 和它的浅色对应，权重
-   (0,2,0)；不加前缀的话这几条 (0,1,0) 永远赢不了，版权条会留着 can-web 那套
-   slate 配色。加上之后两边同权重，而这几条排在后面。 */
+   `:root` 那一层把权重抬到 (0,2,0)：leaflet.css 里
+   `.leaflet-container .leaflet-control-attribution`（白底、`margin: 0`）是
+   (0,2,0)，`.leaflet-touch .leaflet-control-attribution` 也一样；不加前缀的
+   话这里的 (0,1,0) 压不过它们。同权重之下本文件排在后面，所以赢。 */
 :root .leaflet-control-attribution {
   padding: 2px 6px !important;
   border-radius: var(--radius-control) 0 0 0 !important;
@@ -273,7 +279,6 @@
 }
 
 /* 地图上的标记外壳一律透明 —— 内容是 divIcon 里的自绘标签。 */
-.custom-marker,
 .aircraft-marker,
 .vr-marker {
   background: transparent !important;

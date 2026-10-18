@@ -122,8 +122,8 @@ radar.ceruleanavi.net 是那个域下面的一台主机，所以那枚 cookie �
 `globals.css` 前面，好让站点段盖过它。从组件里引的话它是岛屿的动态样式表，浏览器
 插在 `<head>` 末尾，反过来盖住站点段里同权重的规则 —— 版权条会留着一串默认的亮
 蓝链接、比例尺是一块白底。顺序由布局说了算。另外站点段里针对版权条的几条带
-`:root` 前缀，是为了压过从 can-web 搬来的那段里 `.dark .leaflet-control-attribution`
-那一档权重。
+`:root` 前缀，是把权重抬到 (0,2,0)，与 leaflet.css 的
+`.leaflet-container .leaflet-control-attribution` 同档，再靠排在后面取胜。
 
 **站头是 can-ui `CanFrame` 的 `map` 布局**（56px 顶栏、只有一条底边），外壳在
 `src/components/Frame.vue`。**没有本地导航**（`nav` 为空，规格如此）：其余站点由

@@ -2559,8 +2559,7 @@ onBeforeUnmount(() => {
    两个不跟主题走的例外，写在下面各自的注释里。
 --------------------------------------------------------------------------- */
 
-/* 悬停标签。globals.css 底部那块 Leaflet 规则是刻意冻住的，所以 tooltip 的皮
-   跟着引入它的组件走。 */
+/* 悬停标签。tooltip 的皮不放 globals.css，跟着引入它的组件走。 */
 .leaflet-tooltip {
   padding: 2px 6px;
   border: 1px solid var(--border-subtle);
@@ -2635,7 +2634,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 5px;
   padding: 2px 4px;
-  /* 4px 而不是 6px —— 这套设计里的圆角一律小一档。 */
+  /* 圆角取 --radius-control（0.125rem）—— 这套设计里的圆角一律用控件那一档。 */
   border-radius: var(--radius-control);
   white-space: nowrap;
   background: color-mix(in srgb, var(--surface) 94%, transparent);

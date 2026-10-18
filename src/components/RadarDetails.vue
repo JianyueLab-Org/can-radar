@@ -359,7 +359,7 @@ const sections = computed<InfoPopupSection[]>(() => {
       <div class="rd-subtitle">
         <span
           v-if="pilot"
-          class="vr-chip"
+          class="vr-chip vr-chip--status"
           :style="{
             backgroundColor: isOnGround(pilot)
               ? 'var(--color-muted)'

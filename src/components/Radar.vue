@@ -59,7 +59,7 @@ const props = defineProps<{
    *
    * 活动卡和活动席位那一行要链到主站的 `/activities/<id>` —— 这里是另一个源，
    * 写 `href="/activities/3"` 会打在 radar.ceruleanavi.net 上然后 404（AGENTS
-   * 第 4 条，和页眉那份 `site()` 是同一条规矩）。
+   * 第 4 条，跨源的链接一律拼主站的绝对地址）。
    */
   siteOrigin: string;
 }>();
