@@ -6,7 +6,7 @@
 import BaseLayout from "@/layouts/BaseLayout.astro";
 import Frame from "@/components/Frame.vue";
 import { getLocale, getMessages } from "@/lib/i18n";
-import { signInUrl, webOrigin } from "@/server/config";
+import { signInUrl } from "@/server/config";
 import { readMember } from "@/server/session";
 
 const locale = getLocale(Astro.cookies);
@@ -21,7 +21,6 @@ if (member) Astro.response.headers.set("Cache-Control", "private, no-store");
     locale={locale}
     pathname={Astro.url.pathname}
     member={member}
-    siteOrigin={webOrigin()}
     signInHref={signInUrl(Astro.url)}
     client:load
   >

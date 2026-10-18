@@ -229,9 +229,9 @@ export function formatFrequency(
 /**
  * 管制区多边形和航路线的颜色。
  *
- * **为什么是字面量而不是 vr-theme.css 的记号：** 地图开着 `preferCanvas`，多边
+ * **为什么是字面量而不是 can-ui 的记号：** 地图开着 `preferCanvas`，多边
  * 形和折线是画进 canvas 的，而 canvas 的 `strokeStyle` 不认 CSS 自定义属性 ——
- * `var(--vr-t3)` 传给 Leaflet 只会得到一条什么都不画的线。所以这几个值在这里各
+ * `var(--color-muted)` 传给 Leaflet 只会得到一条什么都不画的线。所以这几个值在这里各
  * 留一份，深浅两套。
  *
  * 放在 `radar.ts` 而不是地图组件里，是因为**设置里的图例要用同一批值**。图例和

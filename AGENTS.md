@@ -101,33 +101,29 @@ radar.ceruleanavi.net 是那个域下面的一台主机，所以那枚 cookie �
 失败的分寸也在那儿：**列表取不到就整块失败**（卡片写「取不到」而不是「近期没有活
 动」），**单场活动取不到只是少了它的席位**，不牵连整块板子。
 
-## 外观：这个站不再跟 can-web 一套皮
+## 外观：直接用 can-ui 的航电记号
 
-界面照 [VATSIM Radar](https://github.com/VATSIM-Radar/vatsim-radar) 重做过 ——
-近黑的层级面、1px 发丝边框、4px/8px 的小圆角、Libre Franklin + Jura + Roboto
-Mono，以及**浮在整屏地图上的一摞卡片**取代原来的三栏。
+本站直接用 can-ui 的那一套航电记号（`--surface*`、`--border-*`、
+`--color-ink|muted|faint`、`--color-can`、`--radius-*`），浅色在 `:root`、深色在
+`:root.dark`，调用处不写分主题的代码。**`vr-theme.css` 已经删了**，本站不再有
+自己的颜色、字体或圆角。
 
-**`globals.css` 仍然是 can-web 那份的镜像，一个字都没改。** 换皮的整件事在
-`src/styles/vr-theme.css` 里，它排在 globals.css **后面**加载，把语义记号
-（`--surface*`、`--border-*`、`--color-ink|muted|faint`、两个圆角）和 `.btn`
-/ `.input` / `.badge` 重新指向另一套值。所以没被重写的组件也跟着变了样子。
-两件事别踩：
+- **没有 webfont。** 字体是 can-ui 的 `--font-sans` / `--font-mono`；数字一律
+  `--font-mono` 加 `tabular-nums`。
+- **雷达独有的布局类 `.vr-*`**（排版、浮层里的数据行、席位色块、动效）在
+  `globals.css` 的站点段里，只用 can-ui 的记号。名字是照
+  [VATSIM Radar](https://github.com/VATSIM-Radar/vatsim-radar) 做外观时起的，留着。
+- **席位色取自 `lib/radar.ts` 的 `FACILITY_COLORS`**，那是约定不是装饰。席位色
+  块上是白字，不跟主题走；品牌色上的字用 `--color-on-can`。
+- 不用毛玻璃，浮层是实底。`tokens.test.ts` 守着这三件事：`vr-theme.css` 不在、
+  `src` 里没有 `--vr-*`、没有 `backdrop-filter: blur`。
 
-- 那份文件里**不能有 Tailwind 的 at-rule**。`@theme` 只在 Tailwind 处理的入口
-  里展开，写在那儿不生效，但看上去像能用。
-- 它**不进任何 `@layer`**，这正是它能覆盖的原因 —— 未分层的规则在级联里排在所有
-  分层规则之上，与选择器权重无关。
-
-**品牌色没有跟着换。** vatsim-radar 用 `blue500 #3B6CEC`，这里仍然是 CAN 自己的
-`#4c92c1`：三个站刚统一到网络自己的标识上，为了套一层皮把品牌色也换掉是本末倒
-置。要换只是 `--vr-brand` 那三行。**席位色是照搬的**（DEL/GND/TWR/APP/CTR/ATIS），
-那是约定不是装饰。
-
-**`leaflet.css` 在 `BaseLayout.astro` 里引，不在 RadarMap.vue 里。** 从组件里引
-的话它是岛屿的动态样式表，浏览器插在 `<head>` 末尾，反过来盖住外观层里同权重的
-规则 —— 版权条会留着一串默认的亮蓝链接、比例尺是一块白底。顺序由布局说了算。
-另外 `vr-theme.css` 里针对版权条的几条带 `:root` 前缀，是为了压过 globals.css
-里 `.dark .leaflet-control-attribution` 那一档权重。
+**`leaflet.css` 在 `BaseLayout.astro` 里引，不在 RadarMap.vue 里**，而且排在
+`globals.css` 前面，好让站点段盖过它。从组件里引的话它是岛屿的动态样式表，浏览器
+插在 `<head>` 末尾，反过来盖住站点段里同权重的规则 —— 版权条会留着一串默认的亮
+蓝链接、比例尺是一块白底。顺序由布局说了算。另外站点段里针对版权条的几条带
+`:root` 前缀，是为了压过从 can-web 搬来的那段里 `.dark .leaflet-control-attribution`
+那一档权重。
 
 **站头是 can-ui `CanFrame` 的 `map` 布局**（56px 顶栏、只有一条底边），外壳在
 `src/components/Frame.vue`。**没有本地导航**（`nav` 为空，规格如此）：其余站点由
@@ -279,8 +275,8 @@ z16 —— 这个值**不在服务的 LOD 元数据里**（Esri 那里报到 23�
 ## 地图上的向量颜色在 `lib/radar.ts`
 
 管制区填色（`AREA_COLORS`）和航路线（`ROUTE_COLORS`）是 JS 字面量，不是
-vr-theme.css 的记号 —— 地图开着 `preferCanvas`，多边形和折线画进 canvas，而
-canvas 的 `strokeStyle` 不认 CSS 自定义属性，`var(--vr-t3)` 传给 Leaflet 只会
+can-ui 的记号 —— 地图开着 `preferCanvas`，多边形和折线画进 canvas，而
+canvas 的 `strokeStyle` 不认 CSS 自定义属性，`var(--color-muted)` 传给 Leaflet 只会
 得到一条什么都不画的线。
 
 放在 `lib/radar.ts` 而不是地图组件里，是因为**设置里的图例要用同一批值**。两边
@@ -291,10 +287,8 @@ canvas 的 `strokeStyle` 不认 CSS 自定义属性，`var(--vr-t3)` 传给 Leaf
 
 ## 别的
 
-- `globals.css` 是从 can-web 整份搬来的，只去掉了 `@tailwindcss/typography`
-  （那是给 /docs 长文用的，这里没有长文）。底部的 Leaflet 块是刻意写死的，
-  别动 —— can-web 的 CLAUDE.md 也是这么说的。它现在被 `vr-theme.css` 盖了一层，
-  但**仍然是镜像**：要同步 can-web 的改动，照样整份覆盖过来就行。
+- `globals.css` 是 can-ui 的 import 加本站的站点段（Leaflet 的规则和 `.vr-*`
+  布局类）。站点段排在 import 后面、不进任何 `@layer`。
 - 地图底部的版权条把 VATSpy 和 SimAware **各署名了两次** —— 一次在
   `tileLayer` 的 `attribution` 里，一次在后面的 `addAttribution()` 里。重构前
   它挤在角落没人注意，现在整条横在地图下沿。这是授权文本，没有顺手改掉。

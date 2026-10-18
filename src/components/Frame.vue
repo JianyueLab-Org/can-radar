@@ -23,8 +23,6 @@ const props = defineProps<{
   locale: string;
   pathname: string;
   member: Member | null;
-  /** 主站地址（服务端的 `webOrigin()`）。 */
-  siteOrigin: string;
   /** 服务端用 `signInUrl()` 拼好。 */
   signInHref: string;
 }>();

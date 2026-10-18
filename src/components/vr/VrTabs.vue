@@ -51,7 +51,7 @@ const model = defineModel<string>({ required: true });
   align-items: flex-end;
 
   height: 40px;
-  border-bottom: 1px solid var(--vr-stroke);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .vr-tabs_tab {
@@ -67,7 +67,7 @@ const model = defineModel<string>({ required: true });
   border: none;
 
   font-family: inherit;
-  color: var(--vr-t3);
+  color: var(--color-muted);
   white-space: nowrap;
 
   background: transparent;
@@ -99,20 +99,20 @@ const model = defineModel<string>({ required: true });
 }
 
 .vr-tabs_tab:hover:not(.vr-tabs_tab--active, .vr-tabs_tab--disabled) {
-  color: var(--vr-t1);
+  color: var(--color-ink);
 }
 .vr-tabs_tab:hover:not(.vr-tabs_tab--active, .vr-tabs_tab--disabled)::after {
   height: 1px;
-  background: rgb(var(--vr-brand-rgb) / 0.5);
+  background: color-mix(in srgb, var(--color-can) 50%, transparent);
 }
 
 .vr-tabs_tab--active {
-  color: var(--vr-t1);
+  color: var(--color-ink);
   cursor: default;
 }
 .vr-tabs_tab--active::after {
   height: 2px;
-  background: var(--vr-brand);
+  background: var(--color-can);
 }
 
 .vr-tabs_tab--disabled {
@@ -121,7 +121,7 @@ const model = defineModel<string>({ required: true });
 }
 
 .vr-tabs_count {
-  font-family: var(--vr-font-alt);
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
   color: var(--color-faint);

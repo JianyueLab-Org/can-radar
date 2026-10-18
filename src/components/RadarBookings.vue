@@ -345,7 +345,7 @@ function activityHref(view: StaffingView): string | null {
 
 <style scoped>
 /* 和交通那张卡同一套行样式（`.rt-*`）。两处各写一份是因为 scoped style 不跨组
-   件，而把它提到 vr-theme.css 里会让那份文件开始收纳只有一个调用方的东西。 */
+   件，而把它提到 globals.css 的站点段里会让那段开始收纳只有一个调用方的东西。 */
 .rb-rows {
   display: flex;
   flex-direction: column;
@@ -361,7 +361,7 @@ function activityHref(view: StaffingView): string | null {
   width: 100%;
   padding: 6px;
   border: none;
-  border-radius: 3px;
+  border-radius: var(--radius-control);
 
   font-family: inherit;
   color: inherit;
@@ -377,12 +377,12 @@ function activityHref(view: StaffingView): string | null {
   cursor: pointer;
 }
 .rb-row--clickable:hover {
-  background: var(--vr-alpha-8);
+  background: color-mix(in srgb, var(--color-ink) 8%, transparent);
 }
 
 .rb-row--selected {
-  background: var(--vr-alpha-8);
-  box-shadow: inset 2px 0 0 var(--vr-brand);
+  background: color-mix(in srgb, var(--color-ink) 8%, transparent);
+  box-shadow: inset 2px 0 0 var(--color-can);
 }
 
 .rb-row_chip {
@@ -401,11 +401,11 @@ function activityHref(view: StaffingView): string | null {
 
 .rb-row_callsign {
   overflow: hidden;
-  font-family: var(--vr-font-mono);
+  font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 600;
   line-height: 1.2;
-  color: var(--vr-t1);
+  color: var(--color-ink);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -413,26 +413,26 @@ function activityHref(view: StaffingView): string | null {
 .rb-row_tag {
   margin-left: 6px;
   padding: 1px 4px;
-  border: 1px solid var(--vr-brand);
-  border-radius: 3px;
+  border: 1px solid var(--color-can);
+  border-radius: var(--radius-control);
 
-  font-family: var(--vr-font-sans);
+  font-family: var(--font-sans);
   font-size: 9px;
   font-weight: 600;
   letter-spacing: 0.04em;
-  color: var(--vr-brand);
+  color: var(--color-can);
   vertical-align: 1px;
 }
 .rb-row_tag--online {
-  border-color: var(--vr-success);
-  color: var(--vr-success);
+  border-color: var(--color-success);
+  color: var(--color-success);
 }
 
 .rb-row_sub {
   overflow: hidden;
   font-size: 11px;
   line-height: 1.2;
-  color: var(--vr-t3);
+  color: var(--color-muted);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -457,15 +457,15 @@ function activityHref(view: StaffingView): string | null {
 }
 
 .rb-row_status {
-  font-family: var(--vr-font-alt);
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
   line-height: 1.2;
-  color: var(--vr-t3);
+  color: var(--color-muted);
   white-space: nowrap;
 }
 .rb-row_status--live {
-  color: var(--vr-success);
+  color: var(--color-success);
 }
 
 .rb-row_who {

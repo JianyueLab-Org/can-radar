@@ -145,7 +145,7 @@ function href(id: number): string {
   align-items: flex-start;
 
   padding: 6px;
-  border-radius: 3px;
+  border-radius: var(--radius-control);
 
   color: inherit;
   text-decoration: none;
@@ -153,7 +153,7 @@ function href(id: number): string {
   transition: background-color 0.2s ease;
 }
 .ra-row:hover {
-  background: var(--vr-alpha-8);
+  background: color-mix(in srgb, var(--color-ink) 8%, transparent);
 }
 
 .ra-row_main {
@@ -176,7 +176,7 @@ function href(id: number): string {
   font-size: 13px;
   font-weight: 600;
   line-height: 1.25;
-  color: var(--vr-t1);
+  color: var(--color-ink);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -184,21 +184,21 @@ function href(id: number): string {
 .ra-row_tag {
   flex: none;
   padding: 1px 4px;
-  border: 1px solid var(--vr-brand);
-  border-radius: 3px;
+  border: 1px solid var(--color-can);
+  border-radius: var(--radius-control);
 
-  font-family: var(--vr-font-sans);
+  font-family: var(--font-sans);
   font-size: 9px;
   font-weight: 600;
   letter-spacing: 0.04em;
-  color: var(--vr-brand);
+  color: var(--color-can);
 }
 
 .ra-row_sub {
   overflow: hidden;
   font-size: 11px;
   line-height: 1.2;
-  color: var(--vr-t3);
+  color: var(--color-muted);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -223,14 +223,14 @@ function href(id: number): string {
 
 .ra-row_status {
   flex: none;
-  font-family: var(--vr-font-alt);
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
   line-height: 1.2;
-  color: var(--vr-t3);
+  color: var(--color-muted);
   white-space: nowrap;
 }
 .ra-row_status--live {
-  color: var(--vr-success);
+  color: var(--color-success);
 }
 </style>

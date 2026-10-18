@@ -139,7 +139,7 @@ const sections = computed<InfoPopupSection[]>(() => {
   <VrInfoPopup
     v-if="snapshot"
     :sections="sections"
-    accent="var(--vr-brand)"
+    accent="var(--color-can)"
     @close="emit('close')"
   >
     <template #title>
@@ -257,7 +257,7 @@ const sections = computed<InfoPopupSection[]>(() => {
 
 <style scoped>
 .ra-icao {
-  font-family: var(--vr-font-alt);
+  font-family: var(--font-mono);
   font-size: 18px;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -265,7 +265,7 @@ const sections = computed<InfoPopupSection[]>(() => {
 
 .ra-kind {
   margin-left: 8px;
-  font-family: var(--vr-font-alt);
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
   color: var(--color-faint);
@@ -276,13 +276,13 @@ const sections = computed<InfoPopupSection[]>(() => {
   padding: 8px;
   border-radius: var(--radius-control);
 
-  font-family: var(--vr-font-mono);
+  font-family: var(--font-mono);
   font-size: 11px;
   line-height: 1.6;
-  color: var(--vr-t2);
+  color: var(--color-ink);
   overflow-wrap: anywhere;
 
-  background: var(--vr-alpha-4);
+  background: color-mix(in srgb, var(--color-ink) 4%, transparent);
 }
 .ra-metar--dim {
   color: var(--color-faint);
@@ -307,11 +307,11 @@ const sections = computed<InfoPopupSection[]>(() => {
   width: 100%;
   padding: 5px 6px;
   border: none;
-  border-radius: 3px;
+  border-radius: var(--radius-control);
 
   font-family: inherit;
   font-size: 12px;
-  color: var(--vr-t2);
+  color: var(--color-ink);
   text-align: left;
 
   background: transparent;
@@ -320,7 +320,7 @@ const sections = computed<InfoPopupSection[]>(() => {
   transition: background-color 0.2s ease;
 }
 .ra-item:hover {
-  background: var(--vr-alpha-8);
+  background: color-mix(in srgb, var(--color-ink) 8%, transparent);
 }
 
 .ra-item_chip {
@@ -337,10 +337,10 @@ const sections = computed<InfoPopupSection[]>(() => {
 
 .ra-item_callsign {
   flex: none;
-  font-family: var(--vr-font-mono);
+  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 600;
-  color: var(--vr-t1);
+  color: var(--color-ink);
 }
 
 .ra-item_route {

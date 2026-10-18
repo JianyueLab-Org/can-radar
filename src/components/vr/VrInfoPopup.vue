@@ -82,7 +82,7 @@ function toggleSection(key: string) {
   <section
     class="vr-popup vr-appear-right"
     :class="{ 'vr-popup--collapsed': collapsed }"
-    :style="{ '--vr-popup-max-height': maxHeight }"
+    :style="{ '--radar-popup-max-height': maxHeight }"
   >
     <header class="vr-popup_header">
       <span
@@ -173,7 +173,7 @@ function toggleSection(key: string) {
 
 <style scoped>
 .vr-popup {
-  --vr-popup-padding: 12px;
+  --radar-popup-padding: 12px;
 
   display: flex;
   flex-direction: column;
@@ -183,16 +183,16 @@ function toggleSection(key: string) {
   scrollbar-width: none;
 
   width: 100%;
-  max-height: var(--vr-popup-max-height);
+  max-height: var(--radar-popup-max-height);
   padding-bottom: 8px;
-  border: 1px solid var(--vr-stroke);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-card);
 
-  color: var(--vr-t2);
+  color: var(--color-ink);
   text-align: left;
 
-  background: var(--vr-bg);
-  box-shadow: var(--vr-shadow);
+  background: var(--surface);
+  box-shadow: var(--shadow-popover);
 
   pointer-events: auto;
 }
@@ -209,10 +209,10 @@ function toggleSection(key: string) {
   gap: 8px;
   align-items: center;
 
-  padding: 8px var(--vr-popup-padding);
-  border-bottom: 1px solid var(--vr-stroke);
+  padding: 8px var(--radar-popup-padding);
+  border-bottom: 1px solid var(--border-subtle);
 
-  background: var(--vr-bg);
+  background: var(--surface);
 
   transition: border-bottom-color 0.5s ease;
 }
@@ -224,14 +224,14 @@ function toggleSection(key: string) {
   flex: none;
   width: 3px;
   height: 16px;
-  border-radius: 2px;
+  border-radius: var(--radius-control);
 }
 
 .vr-popup_title {
   flex: 1 1 auto;
   min-width: 0;
   overflow: hidden;
-  color: var(--vr-t1);
+  color: var(--color-ink);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -253,7 +253,7 @@ function toggleSection(key: string) {
   padding: 0;
   border: none;
 
-  color: var(--vr-t3);
+  color: var(--color-muted);
 
   background: transparent;
   cursor: pointer;
@@ -265,17 +265,17 @@ function toggleSection(key: string) {
   height: 14px;
 }
 .vr-popup_action:hover {
-  color: var(--vr-brand);
+  color: var(--color-can);
 }
 /* 关闭键 hover 成红色，并且左边有一条竖线把它和别的动作分开 —— 它是唯一一个
    会丢掉当前这张卡的动作。 */
 .vr-popup_action--close {
   padding-left: 8px;
   width: 28px;
-  border-left: 1px solid var(--vr-alpha-12);
+  border-left: 1px solid color-mix(in srgb, var(--color-ink) 12%, transparent);
 }
 .vr-popup_action--close:hover {
-  color: var(--vr-danger);
+  color: var(--color-danger);
 }
 
 .vr-popup_chevron {
@@ -291,7 +291,7 @@ function toggleSection(key: string) {
   gap: 16px;
 
   margin-top: 8px;
-  padding: 0 var(--vr-popup-padding);
+  padding: 0 var(--radar-popup-padding);
 }
 
 .vr-popup_section {
@@ -310,9 +310,9 @@ function toggleSection(key: string) {
   position: sticky;
   bottom: -8px;
 
-  margin: 0 calc(var(--vr-popup-padding) * -1) -8px;
-  padding: 8px var(--vr-popup-padding);
+  margin: 0 calc(var(--radar-popup-padding) * -1) -8px;
+  padding: 8px var(--radar-popup-padding);
 
-  background: var(--vr-bg);
+  background: var(--surface);
 }
 </style>

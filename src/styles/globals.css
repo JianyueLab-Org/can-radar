@@ -1,14 +1,18 @@
 /* ===========================================================================
    实时雷达的样式表。
 
-   设计系统整体搬到了 can-ui —— 令牌、base 层、组件类、动效层都在那边一份，
-   这里只留下这行 import，以及**真正属于本站**的东西：下面那段 Leaflet 的样式。
+   设计系统整体在 can-ui —— 令牌、base 层、组件类、动效层都在那边一份。这里
+   只有那行 import，以及**真正属于本站**的东西，即 import 之后的站点段：
 
-   原先这里有 1,223 行，其中前 974 行和 can-web 的 globals.css 只差 5 行注释。
+   1. 从 can-web 搬来的那段 Leaflet 规则。它必须留在 import **之后** —— 它靠
+      排在后面才能盖过 leaflet.css 自带的规则（BaseLayout.astro 先引 leaflet.css
+      再引这份）。
+   2. 雷达独有的布局类 `.vr-*`：排版、浮层里的数据行、席位色块、动效。名字沿用
+      照 VATSIM Radar 做外观时起的，值一律取 can-ui 的记号 —— 本站不再有自己的
+      一套颜色、字体或圆角。
 
-   Leaflet 那段是本站独有的，而且必须留在 import **之后** —— 它靠的就是排在
-   后面才能盖过 leaflet.css 自带的规则（见 RadarMap.vue 里关于 attribution
-   链接颜色的那段注释）。它一直是硬写死的，不要动。
+   站点段不进任何 `@layer`：未分层的规则在级联里排在 Tailwind 的分层产物之上，
+   所以这里不需要 `!important` 也能盖过 can-ui 的组件层。
    =========================================================================== */
 
 @import "@jianyuelab-org/can-ui/styles";
@@ -257,8 +261,300 @@
   cursor: pointer;
 }
 
-.boundary-toggle-btn {
-  transition: all 0.2s ease;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+/* ---------------------------------------------------------------------------
+   排版。vatsim-radar 的 UiText 是一个组件，这里做成类 —— 因为它一半的用处在
+   Astro 的静态标记里，那里没有岛屿可以挂。名字照抄那边的 type 值，方便对读。
+--------------------------------------------------------------------------- */
+
+.vr-h1 {
+  font-size: 32px;
+}
+.vr-h2 {
+  font-size: 28px;
+}
+.vr-h3 {
+  font-size: 24px;
+  text-transform: uppercase;
+}
+.vr-h4 {
+  font-size: 20px;
+  text-transform: uppercase;
+}
+.vr-h5 {
+  font-size: 16px;
+}
+.vr-h1,
+.vr-h2,
+.vr-h3,
+.vr-h4,
+.vr-h5 {
+  margin: 0;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.01em;
+}
+
+.vr-1b {
+  font-size: 16px;
+}
+.vr-2b {
+  font-size: 14px;
+}
+.vr-2b-medium {
+  font-size: 14px;
+  font-weight: 600;
+}
+.vr-3b {
+  font-size: 12px;
+}
+.vr-3b-medium {
+  font-size: 12px;
+  font-weight: 600;
+}
+.vr-1b,
+.vr-2b,
+.vr-2b-medium,
+.vr-3b,
+.vr-3b-medium {
+  font-weight: 500;
+  line-height: 1.3;
+}
+.vr-2b-medium,
+.vr-3b-medium {
+  font-weight: 600;
+}
+
+.vr-caption {
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+/* 全大写的小标签用等宽体 —— 分区标题、单位、席位代号都用它。 */
+.vr-label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 0.9;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.vr-label-sm {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 0.9;
+  text-transform: uppercase;
+}
+
+.vr-mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------------------
+   浮层内部的数据排版。
+
+   vatsim-radar 的 `__grid-info-sections`：左边一列窄的全大写标签，右边是值。
+   **不是**两端对齐 —— 那样每一行的值都从不同的地方开始，一列数字读下来是锯齿
+   状的。固定比例的网格让值左对齐成一列。
+--------------------------------------------------------------------------- */
+
+.vr-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vr-row {
+  display: grid;
+  grid-template-columns: minmax(0, 34%) minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+
+.vr-row_k {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.1;
+  color: var(--color-faint);
+  text-transform: uppercase;
+}
+
+.vr-row_v {
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-ink);
+  overflow-wrap: anywhere;
+}
+
+/* 一整行的值（航路、备注这种），标签在上、值在下。 */
+.vr-row--stacked {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* 并排的小方块，用来放三四个一眼扫过去的数字（高度、地速、航向）。 */
+.vr-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.vr-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+
+  padding: 6px 8px;
+  border-radius: var(--radius-control);
+
+  background: color-mix(in srgb, var(--color-ink) 4%, transparent);
+}
+
+.vr-tile_k {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--color-faint);
+  text-transform: uppercase;
+}
+
+.vr-tile_v {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.1;
+  color: var(--color-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* 席位色块。地图上的标签和面板里的列表用同一个形状，所以点开一张卡之后还认得
+   出它对应地图上哪一块颜色。 */
+.vr-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 1px 5px;
+  border-radius: var(--radius-control);
+
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: #fff;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ---------------------------------------------------------------------------
+   Leaflet 里还在用的几件，用 can-ui 的记号重新定义一遍。地图底色和底图的色调
+   不在这里。
+--------------------------------------------------------------------------- */
+
+/* 缩放控件由 MapControls 那一列按钮取代了，Leaflet 自带的那个不再出现；
+   万一某处还开着，至少让它不是白底圆角。 */
+.leaflet-control-zoom {
+  display: none !important;
+}
+
+/* 版权条。
+
+   `:root` 那一层不是装饰 —— 上面从 can-web 搬来的那段里有
+   `.dark .leaflet-control-attribution { … !important }` 和它的浅色对应，权重
+   (0,2,0)；不加前缀的话这几条 (0,1,0) 永远赢不了，版权条会留着 can-web 那套
+   slate 配色。加上之后两边同权重，而这几条排在后面。 */
+:root .leaflet-control-attribution {
+  padding: 2px 6px !important;
+  border-radius: var(--radius-control) 0 0 0 !important;
+  font-family: var(--font-sans) !important;
+  font-size: 10px !important;
+  line-height: 1.5 !important;
+  color: var(--color-faint) !important;
+  background: color-mix(in srgb, var(--surface) 80%, transparent) !important;
+}
+:root .leaflet-control-attribution a {
+  color: var(--color-muted) !important;
+  text-decoration: none !important;
+}
+:root .leaflet-control-attribution a:hover {
+  text-decoration: underline !important;
+}
+
+/* 窄屏上这一串会折成三行，把地图底部整块吃掉。给它一个上限，剩下的横向滚 ——
+   授权要求的是署名出现在展示它的地方，不是它必须一次全部铺开。 */
+@media (max-width: 767px) {
+  :root .leaflet-control-attribution {
+    max-width: calc(100vw - 16px);
+    max-height: 2.6em;
+    overflow: auto hidden;
+    white-space: nowrap;
+  }
+}
+
+/* 地图上的标记外壳一律透明 —— 内容是 divIcon 里的自绘标签。 */
+.custom-marker,
+.aircraft-marker,
+.vr-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Leaflet 的原生 popup 这次不用了（选中的东西一律走右侧浮层），
+   留一条兜底样式，免得哪天有人加回来时是一块刺眼的白。 */
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  border: 1px solid var(--border-subtle) !important;
+  border-radius: var(--radius-card) !important;
+  color: var(--color-ink) !important;
+  background: var(--surface) !important;
+  box-shadow: var(--shadow-popover) !important;
+}
+.leaflet-popup-content {
+  margin: 10px 12px;
+  font-size: 12px;
+}
+
+/* ---------------------------------------------------------------------------
+   动效。vatsim-radar 的过渡一律 0.3s，浮层从右侧推入。
+--------------------------------------------------------------------------- */
+
+@keyframes vr-slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@keyframes vr-slide-in-bottom {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.vr-appear-right {
+  animation: vr-slide-in-right 0.3s ease both;
+}
+.vr-appear-bottom {
+  animation: vr-slide-in-bottom 0.3s ease both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vr-appear-right,
+  .vr-appear-bottom {
+    animation: none;
+  }
 }
