@@ -191,11 +191,5 @@
       "zh": "Chinese",
       "en": "English"
     }
-  },
-  "notFound": {
-    "code": "404",
-    "title": "Page not found",
-    "description": "The address may be wrong, or the page has moved.",
-    "home": "Back to the radar"
   }
 }
