@@ -80,7 +80,7 @@ function onClick(event: MouseEvent) {
   font-size: 14px;
   font-weight: 500;
   line-height: 1.3;
-  color: var(--vr-t2);
+  color: var(--color-ink);
   text-align: center;
   text-decoration: none;
   white-space: nowrap;
@@ -95,7 +95,7 @@ function onClick(event: MouseEvent) {
 }
 
 .vr-btn:focus-visible {
-  outline: 2px solid var(--vr-brand);
+  outline: 2px solid var(--color-can);
   outline-offset: 1px;
 }
 
@@ -126,40 +126,40 @@ function onClick(event: MouseEvent) {
 /* ——— 形态 ——— */
 
 .vr-btn--primary {
-  background: var(--vr-brand);
-  color: #fff;
+  background: var(--color-can);
+  color: var(--color-on-can);
 }
 .vr-btn--primary:hover:not(:disabled) {
-  background: var(--vr-brand-hover);
+  background: var(--color-can-dark);
 }
 .vr-btn--primary:active:not(:disabled) {
-  background: var(--vr-brand-active);
+  background: var(--color-can-dark);
 }
 
 .vr-btn--secondary:hover:not(:disabled) {
-  background: var(--vr-alpha-8);
-  color: var(--vr-t1);
+  background: color-mix(in srgb, var(--color-ink) 8%, transparent);
+  color: var(--color-ink);
 }
 .vr-btn--secondary:active:not(:disabled) {
-  background: rgb(var(--vr-brand-rgb) / 0.32);
+  background: color-mix(in srgb, var(--color-can) 32%, transparent);
 }
 
 .vr-btn--secondary-black {
-  background: var(--vr-l3);
+  background: var(--surface-overlay);
 }
 .vr-btn--secondary-black:hover:not(:disabled) {
-  background: var(--vr-l4);
-  color: var(--vr-t1);
+  background: color-mix(in srgb, var(--color-ink) 8%, var(--surface-overlay));
+  color: var(--color-ink);
 }
 .vr-btn--secondary-black:active:not(:disabled) {
-  background: var(--vr-l5);
+  background: var(--border-subtle);
 }
 
 .vr-btn--destructive {
-  color: var(--vr-danger);
+  color: var(--color-danger);
 }
 .vr-btn--destructive:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--vr-danger) 12%, transparent);
+  background: color-mix(in srgb, var(--color-danger) 12%, transparent);
 }
 
 .vr-btn--link {
@@ -168,13 +168,13 @@ function onClick(event: MouseEvent) {
   padding: 0;
   border-radius: 0;
   font-size: 12px;
-  color: var(--vr-brand);
+  color: var(--color-can);
   text-decoration: underline;
   text-underline-offset: 0.25em;
   background: transparent;
 }
 .vr-btn--link:hover:not(:disabled) {
-  color: var(--vr-brand-hover);
+  color: var(--color-can-dark);
 }
 .vr-btn--link.vr-btn--icon {
   width: auto;
@@ -184,8 +184,8 @@ function onClick(event: MouseEvent) {
 /* 被按住的那一个（比如打开着的设置面板）用品牌色描一圈，而不是填满 ——
    填满会和主按钮混淆，而它并不是这一屏的主要动作。 */
 .vr-btn--active:not(.vr-btn--primary) {
-  color: var(--vr-brand);
-  box-shadow: inset 0 0 0 1px var(--vr-brand);
+  color: var(--color-can);
+  box-shadow: inset 0 0 0 1px var(--color-can);
 }
 
 /* ——— 尺寸 ——— */

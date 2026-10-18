@@ -68,9 +68,9 @@ const emit = defineEmits<{ "update:collapsed": [value: boolean] }>();
   width: 100%;
   padding: 8px 0 0;
   border: none;
-  border-top: 1px solid var(--vr-alpha-12);
+  border-top: 1px solid color-mix(in srgb, var(--color-ink) 12%, transparent);
 
-  color: var(--vr-t2);
+  color: var(--color-ink);
   text-align: left;
 
   background: transparent;
@@ -81,7 +81,7 @@ const emit = defineEmits<{ "update:collapsed": [value: boolean] }>();
   transition: color 0.3s ease;
 }
 .vr-block-title--collapsible:hover {
-  color: var(--vr-brand);
+  color: var(--color-can);
 }
 
 .vr-block-title_bubble {
@@ -94,14 +94,14 @@ const emit = defineEmits<{ "update:collapsed": [value: boolean] }>();
   padding: 0 5px;
   border-radius: var(--radius-control);
 
-  font-family: var(--vr-font-alt);
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
   line-height: 1;
-  color: var(--vr-t3);
+  color: var(--color-muted);
   font-variant-numeric: tabular-nums;
 
-  background: var(--vr-alpha-12);
+  background: color-mix(in srgb, var(--color-ink) 12%, transparent);
 }
 
 .vr-block-title_spacer {

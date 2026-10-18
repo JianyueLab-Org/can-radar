@@ -21,11 +21,11 @@
 import { onMounted, onBeforeUnmount, ref, watch } from "vue";
 import L from "leaflet";
 import { ICP_FILING } from "@jianyuelab-org/can-ui/sites";
-/* leaflet.css **不在这里引**，在 BaseLayout.astro 里，排在 vr-theme.css 前面。
+/* leaflet.css **不在这里引**，在 BaseLayout.astro 里，排在 globals.css 前面。
  *
  * 从这里引的话，它是这个岛屿的一个动态样式表，浏览器会在组件加载时把它插到
  * <head> 的最后 —— 也就是排在整站样式的**后面**。于是 Leaflet 自己那份
- * `.leaflet-control-attribution a { color: #0078A8 }` 会赢过外观层同权重的那条，
+ * `.leaflet-control-attribution a { color: #0078A8 }` 会赢过 globals.css 站点段里同权重的那条，
  * 版权条上留着一串默认的亮蓝色链接和一块白底比例尺。改成在布局里引，顺序就由
  * 我们说了算。 */
 import { airportAt, loadAirports, loadedAirports } from "@/lib/airports";
@@ -192,6 +192,28 @@ function tileUrl(): string {
     default:
       return TILES[props.theme];
   }
+}
+
+/** 当前底图对应的容器类，globals.css 按它给瓦片加滤镜。 */
+function basemapClass(): string {
+  const key =
+    props.settings.basemap === "satellite"
+      ? "satellite"
+      : props.settings.basemap === "auto"
+        ? props.theme
+        : props.settings.basemap;
+  return `radar-basemap-${key}`;
+}
+
+function applyBasemapClass() {
+  const el = mapContainer.value;
+  if (!el) return;
+  el.classList.remove(
+    "radar-basemap-dark",
+    "radar-basemap-light",
+    "radar-basemap-satellite",
+  );
+  el.classList.add(basemapClass());
 }
 
 const mapContainer = ref<HTMLDivElement | null>(null);
@@ -441,7 +463,7 @@ function pilotSignature(
  *
  * 两种记号可以同时戴：选中的那一圈白边，和「这是我自己」的那一圈品牌色。自己
  * 那架画在里圈 —— 选中会换人，而它整个航段都是同一架，里圈是不会被挪走的那一
- * 层。用 `var(--vr-brand)` 而不是写死的色号：标记是 DOM（`preferCanvas` 只管
+ * 层。用 `var(--color-can)` 而不是写死的色号：标记是 DOM（`preferCanvas` 只管
  * 向量图层），所以自定义属性在这里是认的，品牌色仍然只有一处定义。
  */
 function aircraftIcon(
@@ -459,7 +481,7 @@ function aircraftIcon(
   const svgSize = size - 4;
 
   const rings = [
-    mine ? "0 0 0 2px var(--vr-brand)" : "",
+    mine ? "0 0 0 2px var(--color-can)" : "",
     selected ? `0 0 0 ${mine ? 4 : 2}px rgba(255,255,255,.7)` : "",
   ].filter(Boolean);
 
@@ -2166,6 +2188,7 @@ watch(
       tileLayer.options.maxNativeZoom = tileMaxNativeZoom();
       tileLayer.setUrl(tileUrl());
     }
+    applyBasemapClass();
     applyLayerVisibility();
   },
 );
@@ -2314,6 +2337,7 @@ onMounted(async () => {
   });
   resizeObserver.observe(mapContainer.value);
 
+  applyBasemapClass();
   tileLayer = L.tileLayer(tileUrl(), {
     // The airspace credits are not decoration: VATSpy's data is CC BY-SA 4.0,
     // which requires attribution wherever it is shown. The basemap half is the
@@ -2484,6 +2508,7 @@ watch(
   () => props.theme,
   (theme) => {
     if (tileLayer) tileLayer.setUrl(tileUrl());
+    applyBasemapClass();
     rescaleIcons();
     drawTrail();
     drawRoute();
@@ -2527,29 +2552,28 @@ onBeforeUnmount(() => {
 /* ---------------------------------------------------------------------------
    地图上的字。
 
-   全部改成 vr-theme.css 的记号 —— 原来这里写死的是 slate 系（#0f172a /
+   全部用 can-ui 的记号 —— 原来这里写死的是 slate 系（#0f172a /
    #e2e8f0），那是 can-web 的配色。地图是这个站唯一的主体，标签的底色和面板的底
    色差一点点就会看出来是两套东西拼的。
 
    两个不跟主题走的例外，写在下面各自的注释里。
 --------------------------------------------------------------------------- */
 
-/* 悬停标签。globals.css 底部那块 Leaflet 规则是刻意冻住的，所以 tooltip 的皮
-   跟着引入它的组件走。 */
+/* 悬停标签。tooltip 的皮不放 globals.css，跟着引入它的组件走。 */
 .leaflet-tooltip {
   padding: 2px 6px;
-  border: 1px solid var(--vr-stroke);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-control);
-  background: var(--vr-bg);
-  color: var(--vr-t1);
-  font-family: var(--vr-font-sans);
+  background: var(--surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
   font-size: 11px;
   font-weight: 500;
-  box-shadow: var(--vr-shadow);
+  box-shadow: var(--shadow-popover);
 }
 
 .leaflet-tooltip-top::before {
-  border-top-color: var(--vr-stroke);
+  border-top-color: var(--border-subtle);
 }
 
 /* 呼号，跟在飞机旁边，由缩放级别的过滤器决定露不露，而不是每个标记重建一次。
@@ -2564,11 +2588,11 @@ onBeforeUnmount(() => {
   display: none;
   margin-top: 1px;
   padding: 0 3px;
-  border-radius: 3px;
+  border-radius: var(--radius-control);
   white-space: nowrap;
-  background: color-mix(in srgb, var(--vr-bg) 82%, transparent);
-  color: var(--vr-t1);
-  font-family: var(--vr-font-mono);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 500;
   line-height: 1.4;
@@ -2594,8 +2618,8 @@ onBeforeUnmount(() => {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--vr-bg);
-  border: 1.5px solid var(--vr-t2);
+  background: var(--surface);
+  border: 1.5px solid var(--color-ink);
 }
 
 .radar-tag {
@@ -2610,12 +2634,12 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 5px;
   padding: 2px 4px;
-  /* 4px 而不是 6px —— 这套设计里的圆角一律小一档。 */
+  /* 圆角取 --radius-control（0.125rem）—— 这套设计里的圆角一律用控件那一档。 */
   border-radius: var(--radius-control);
   white-space: nowrap;
-  background: color-mix(in srgb, var(--vr-bg) 94%, transparent);
-  border: 1px solid var(--vr-stroke);
-  box-shadow: var(--vr-shadow);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-popover);
   font-size: 11px;
   line-height: 1.45;
 }
@@ -2623,18 +2647,18 @@ onBeforeUnmount(() => {
 /* 选中的那一个描一圈品牌色。原来描的是中性灰，在一屏彩色的席位方块里根本认不
    出哪个是「我刚点的那个」。 */
 .radar-tag.is-selected {
-  border-color: var(--vr-brand);
+  border-color: var(--color-can);
   box-shadow:
-    0 0 0 1px var(--vr-brand),
-    var(--vr-shadow);
+    0 0 0 1px var(--color-can),
+    var(--shadow-popover);
 }
 
 .radar-tag__code {
-  font-family: var(--vr-font-alt);
+  font-family: var(--font-mono);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.04em;
-  color: var(--vr-t1);
+  color: var(--color-ink);
   cursor: pointer;
 }
 
@@ -2648,11 +2672,11 @@ onBeforeUnmount(() => {
   gap: 3px;
   align-items: baseline;
   padding: 0 4px;
-  border-radius: 3px;
+  border-radius: var(--radius-control);
   /* 席位色是饱和的实色，白字在六种颜色上都读得动 —— 这里**不跟主题走**，
      深浅两套下都是白字。 */
   color: #fff;
-  font-family: var(--vr-font-alt);
+  font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.04em;
@@ -2661,7 +2685,7 @@ onBeforeUnmount(() => {
 }
 
 .radar-tag__chip_frequency {
-  font-family: var(--vr-font-mono);
+  font-family: var(--font-mono);
   font-size: 9px;
   font-weight: 500;
   letter-spacing: 0;
@@ -2669,7 +2693,7 @@ onBeforeUnmount(() => {
 }
 
 .radar-tag__chip.is-selected {
-  box-shadow: 0 0 0 1.5px var(--vr-bg);
+  box-shadow: 0 0 0 1.5px var(--surface);
 }
 
 /* 航路两端：机场上一个点，旁边是它的 ICAO。 */
@@ -2680,11 +2704,11 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 3px;
   padding: 1px 4px 1px 2px;
-  border-radius: 3px;
+  border-radius: var(--radius-control);
   white-space: nowrap;
-  background: color-mix(in srgb, var(--vr-bg) 85%, transparent);
-  color: var(--vr-t1);
-  font-family: var(--vr-font-alt);
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.03em;
@@ -2694,7 +2718,7 @@ onBeforeUnmount(() => {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: var(--radar-airport-color, var(--vr-t3));
+  background: var(--radar-airport-color, var(--color-muted));
 }
 
 /* 航路上的航路点。点是标记，名字由缩放过滤器决定露不露，而且永远不会出现在小
@@ -2708,7 +2732,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 3px;
   white-space: nowrap;
-  font-family: var(--vr-font-mono);
+  font-family: var(--font-mono);
   font-size: 9px;
   font-weight: 500;
   line-height: 1;
@@ -2725,8 +2749,8 @@ onBeforeUnmount(() => {
   height: 10.5px;
   flex: none;
   overflow: visible;
-  fill: color-mix(in srgb, var(--vr-bg) 88%, transparent);
-  stroke: var(--radar-fix-color, var(--vr-t3));
+  fill: color-mix(in srgb, var(--surface) 88%, transparent);
+  stroke: var(--radar-fix-color, var(--color-muted));
   /* 描边按 viewBox 的单位算，元素放大它也跟着放大 —— 所以放大之后这个数要往
      回收一点，否则三角形会从「一个描出来的形状」变成「一坨实心的」。 */
   stroke-width: 1.2;
@@ -2736,9 +2760,9 @@ onBeforeUnmount(() => {
 .radar-fix__name {
   display: none;
   padding: 0 3px;
-  border-radius: 3px;
-  background: color-mix(in srgb, var(--vr-bg) 80%, transparent);
-  color: var(--vr-t2);
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  color: var(--color-ink);
 }
 
 .show-fix-labels .radar-fix:not(.radar-fix--terminal) .radar-fix__name,
@@ -2752,11 +2776,11 @@ onBeforeUnmount(() => {
   transform: translate(-50%, -50%);
   display: none;
   padding: 0 3px;
-  border-radius: 3px;
+  border-radius: var(--radius-control);
   white-space: nowrap;
-  background: color-mix(in srgb, var(--vr-bg) 82%, transparent);
-  color: var(--radar-via-color, var(--vr-t3));
-  font-family: var(--vr-font-alt);
+  background: color-mix(in srgb, var(--surface) 82%, transparent);
+  color: var(--radar-via-color, var(--color-muted));
+  font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.03em;
@@ -2770,14 +2794,14 @@ onBeforeUnmount(() => {
 /* 比例尺。Leaflet 自带的是一条白边黑字的方框，压在近黑的底图上是一块补丁。 */
 .leaflet-control-scale-line {
   padding: 1px 5px;
-  border: 1px solid var(--vr-stroke) !important;
+  border: 1px solid var(--border-subtle) !important;
   border-top: none !important;
-  border-radius: 0 0 3px 3px;
-  color: var(--vr-t3);
-  font-family: var(--vr-font-alt);
+  border-radius: 0 0 var(--radius-control) var(--radius-control);
+  color: var(--color-muted);
+  font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
   text-shadow: none;
-  background: color-mix(in srgb, var(--vr-bg) 80%, transparent) !important;
+  background: color-mix(in srgb, var(--surface) 80%, transparent) !important;
 }
 </style>

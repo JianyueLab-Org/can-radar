@@ -59,7 +59,7 @@ const props = defineProps<{
    *
    * 活动卡和活动席位那一行要链到主站的 `/activities/<id>` —— 这里是另一个源，
    * 写 `href="/activities/3"` 会打在 radar.ceruleanavi.net 上然后 404（AGENTS
-   * 第 4 条，和页眉那份 `site()` 是同一条规矩）。
+   * 第 4 条，跨源的链接一律拼主站的绝对地址）。
    */
   siteOrigin: string;
 }>();
@@ -853,7 +853,7 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
-  background: var(--vr-bg);
+  background: var(--surface);
 }
 
 .radar_map {
@@ -872,7 +872,7 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
   font-size: 13px;
   color: var(--color-faint);
 
-  background: var(--vr-l1);
+  background: var(--surface-raised);
 }
 
 /* ——— 左上：状态条 ——— */
@@ -889,12 +889,11 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
 
   max-width: calc(100% - 24px);
   padding: 4px 6px 4px 10px;
-  border: 1px solid var(--vr-stroke);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-card);
 
-  background: color-mix(in srgb, var(--vr-bg) 92%, transparent);
-  backdrop-filter: blur(8px);
-  box-shadow: var(--vr-shadow);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-popover);
 }
 
 .radar_status_group {
@@ -913,11 +912,11 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--vr-success);
+  background: var(--color-success);
   animation: radar-pulse 2s ease-in-out infinite;
 }
 .radar_status_dot--stale {
-  background: var(--vr-danger);
+  background: var(--color-danger);
   animation: none;
 }
 
@@ -939,7 +938,7 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
 .radar_status_error {
   font-size: 11px;
   font-weight: 600;
-  color: var(--vr-danger);
+  color: var(--color-danger);
 }
 
 /* ——— 我的飞机 ——— */
@@ -953,11 +952,11 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
   font-size: 12px;
 }
 .radar_mine.vr-btn--active {
-  color: #fff;
-  background: var(--vr-brand);
+  color: var(--color-on-can);
+  background: var(--color-can);
 }
 .radar_mine.vr-btn--active:hover {
-  background: var(--vr-brand-hover);
+  background: var(--color-can-dark);
 }
 
 .radar_mine_idle {
@@ -1000,11 +999,11 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
   max-width: calc(100vw - 80px);
   max-height: calc(100dvh - 160px);
   overflow-y: auto;
-  border: 1px solid var(--vr-stroke);
+  border: 1px solid var(--border-subtle);
   border-radius: var(--radius-card);
 
-  background: var(--vr-bg);
-  box-shadow: var(--vr-shadow);
+  background: var(--surface);
+  box-shadow: var(--shadow-popover);
 }
 
 .radar_settings_head {
@@ -1016,9 +1015,9 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
   justify-content: space-between;
 
   padding: 8px 12px;
-  border-bottom: 1px solid var(--vr-stroke);
+  border-bottom: 1px solid var(--border-subtle);
 
-  background: var(--vr-bg);
+  background: var(--surface);
 }
 
 .radar_settings_body {
@@ -1047,12 +1046,12 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
   align-items: center;
 
   font-size: 12px;
-  color: var(--vr-t2);
+  color: var(--color-ink);
 
   cursor: pointer;
 }
 .radar_settings_toggle input {
-  accent-color: var(--vr-brand);
+  accent-color: var(--color-can);
 }
 
 .radar_legend {
@@ -1071,14 +1070,14 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
   gap: 8px;
   align-items: center;
   font-size: 11px;
-  color: var(--vr-t3);
+  color: var(--color-muted);
 }
 
 .radar_legend_swatch {
   flex: none;
   width: 10px;
   height: 10px;
-  border-radius: 2px;
+  border-radius: var(--radius-control);
 }
 /* 空心的那一个 —— 覆盖范围环在地图上就是一个没有填色的圈。 */
 .radar_legend_swatch--ring {
@@ -1096,7 +1095,7 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
 .radar_legend_ramp_bar {
   display: flex;
   overflow: hidden;
-  border-radius: 2px;
+  border-radius: var(--radius-control);
 }
 .radar_legend_ramp_bar span {
   width: 18px;

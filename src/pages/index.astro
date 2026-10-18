@@ -41,13 +41,12 @@ if (member) {
 }
 ---
 
-<BaseLayout title="Radar · Cerulean Aviation Network" floatingControls={false}>
+<BaseLayout floatingControls={false}>
   <Frame
     messages={headerMessages}
     locale={locale}
     pathname={Astro.url.pathname}
     member={member}
-    siteOrigin={siteOrigin}
     signInHref={signInUrl(Astro.url)}
     client:load
   >

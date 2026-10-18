@@ -229,9 +229,9 @@ export function formatFrequency(
 /**
  * 管制区多边形和航路线的颜色。
  *
- * **为什么是字面量而不是 vr-theme.css 的记号：** 地图开着 `preferCanvas`，多边
+ * **为什么是字面量而不是 can-ui 的记号：** 地图开着 `preferCanvas`，多边
  * 形和折线是画进 canvas 的，而 canvas 的 `strokeStyle` 不认 CSS 自定义属性 ——
- * `var(--vr-t3)` 传给 Leaflet 只会得到一条什么都不画的线。所以这几个值在这里各
+ * `var(--color-muted)` 传给 Leaflet 只会得到一条什么都不画的线。所以这几个值在这里各
  * 留一份，深浅两套。
  *
  * 放在 `radar.ts` 而不是地图组件里，是因为**设置里的图例要用同一批值**。图例和
@@ -247,19 +247,20 @@ export const AREA_COLORS = {
    */
   active: FACILITY_COLORS[6],
   /**
-   * 没人管的管制区。取自 vatsim-radar 的 `mapSectorBorder`：全世界几百个 FIR
-   * 同时画出来是一张网，它的任务是「在那儿但别抢眼」。
+   * 没人管的管制区。思路取自 vatsim-radar 的 `mapSectorBorder`：全世界几百个 FIR
+   * 同时画出来是一张网，它的任务是「在那儿但别抢眼」。色值抄 can-ui
+   * `--border-strong`（深 / 浅）：canvas 读不了 CSS 变量。
    */
-  idle: { dark: "#3a3a3a", light: "#cbcbcb" },
+  idle: { dark: "#2c3a48", light: "#b8c2cc" },
 } as const;
 
 /**
- * 航路线。中性灰，两套主题各一个。
+ * 航路线。次要文字色，两套主题各一个；对应 can-ui `--color-muted`（深 / 浅）。
  *
  * 刻意不用品牌色也不用高度色：飞机是按高度着色的，航路线要是也有颜色，一屏上就
  * 有两套互相竞争的色彩编码。它是背景信息。
  */
-export const ROUTE_COLORS = { dark: "#8a8a8a", light: "#5a5a5a" } as const;
+export const ROUTE_COLORS = { dark: "#8a97a4", light: "#4f5b67" } as const;
 
 /**
  * One-letter labels for the positions that share an airport's tag, the way

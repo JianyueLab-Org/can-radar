@@ -1,14 +1,9 @@
 {
   "header": {
-    "onlineMap": "雷達",
     "signIn": "登入",
     "signOut": "登出",
     "signingOut": "正在登出…",
     "signOutFailed": "登出失敗，請重試。",
-    "panel": "飛行員面板",
-    "roster": "管制員名冊",
-    "activities": "活動",
-    "downloads": "下載",
     "skipToContent": "跳至主要內容",
     "openMenu": "開啟選單",
     "openSidebar": "開啟導覽",
@@ -196,5 +191,11 @@
       "zh": "中文",
       "en": "英語"
     }
+  },
+  "notFound": {
+    "code": "404",
+    "title": "頁面不存在",
+    "description": "網址可能有誤，或這一頁已經移走。",
+    "home": "返回雷達"
   }
 }

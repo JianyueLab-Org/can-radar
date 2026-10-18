@@ -359,11 +359,11 @@ const sections = computed<InfoPopupSection[]>(() => {
       <div class="rd-subtitle">
         <span
           v-if="pilot"
-          class="vr-chip"
+          class="vr-chip vr-chip--status"
           :style="{
             backgroundColor: isOnGround(pilot)
-              ? 'var(--vr-t3)'
-              : 'var(--vr-success)',
+              ? 'var(--color-muted)'
+              : 'var(--color-success)',
           }"
         >
           {{
@@ -508,7 +508,7 @@ const sections = computed<InfoPopupSection[]>(() => {
 }
 
 .rd-subtitle_aircraft {
-  font-family: var(--vr-font-mono);
+  font-family: var(--font-mono);
   font-size: 12px;
   color: var(--color-faint);
 }
@@ -521,7 +521,7 @@ const sections = computed<InfoPopupSection[]>(() => {
   padding: 10px;
   border-radius: var(--radius-control);
 
-  background: var(--vr-alpha-4);
+  background: color-mix(in srgb, var(--color-ink) 4%, transparent);
 }
 
 .rd-route_line {
@@ -532,12 +532,12 @@ const sections = computed<InfoPopupSection[]>(() => {
 }
 
 .rd-route_icao {
-  font-family: var(--vr-font-alt);
+  font-family: var(--font-mono);
   font-size: 20px;
   font-weight: 600;
   line-height: 1;
   letter-spacing: 0.02em;
-  color: var(--vr-t1);
+  color: var(--color-ink);
 }
 
 .rd-route_arrow {
@@ -561,7 +561,7 @@ const sections = computed<InfoPopupSection[]>(() => {
   gap: 16px;
   justify-content: space-between;
   font-size: 13px;
-  color: var(--vr-t1);
+  color: var(--color-ink);
 }
 .rd-route_eta > div {
   display: flex;
@@ -575,10 +575,10 @@ const sections = computed<InfoPopupSection[]>(() => {
 
 /* 原文（航路、备注、ATIS）。等宽 + 允许换行 —— 一条 200 字符的航路必须能折。 */
 .rd-raw {
-  font-family: var(--vr-font-mono);
+  font-family: var(--font-mono);
   font-size: 11px;
   line-height: 1.6;
-  color: var(--vr-t2);
+  color: var(--color-ink);
   overflow-wrap: anywhere;
 }
 .rd-raw--dim {
@@ -593,7 +593,7 @@ const sections = computed<InfoPopupSection[]>(() => {
   padding: 8px;
   border-radius: var(--radius-control);
 
-  background: var(--vr-alpha-4);
+  background: color-mix(in srgb, var(--color-ink) 4%, transparent);
 }
 </style>
 
@@ -610,7 +610,7 @@ const sections = computed<InfoPopupSection[]>(() => {
   padding: 0;
   border: none;
 
-  color: var(--vr-t3);
+  color: var(--color-muted);
 
   background: transparent;
   cursor: pointer;
@@ -622,6 +622,6 @@ const sections = computed<InfoPopupSection[]>(() => {
   height: 14px;
 }
 .vr-popup-action:hover {
-  color: var(--vr-brand);
+  color: var(--color-can);
 }
 </style>

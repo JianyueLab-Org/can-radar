@@ -26,7 +26,7 @@ withDefaults(
   padding: 0 5px;
   border-radius: var(--radius-control);
 
-  font-family: var(--vr-font-alt);
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
   line-height: 1;
@@ -34,19 +34,21 @@ withDefaults(
 }
 
 .vr-bubble--primary {
-  background: var(--vr-brand);
-  color: #fff;
+  background: var(--color-can);
+  color: var(--color-on-can);
 }
 .vr-bubble--secondary {
-  background: var(--vr-alpha-12);
-  color: var(--vr-t3);
+  background: color-mix(in srgb, var(--color-ink) 12%, transparent);
+  color: var(--color-muted);
 }
+/* 深色主题下状态色是浅色调，白字读不动 —— 跟品牌色用同一个前景：浅色下白、
+   深色下近黑。 */
 .vr-bubble--success {
-  background: var(--vr-success);
-  color: #fff;
+  background: var(--color-success);
+  color: var(--color-on-can);
 }
 .vr-bubble--danger {
-  background: var(--vr-danger);
-  color: #fff;
+  background: var(--color-danger);
+  color: var(--color-on-can);
 }
 </style>

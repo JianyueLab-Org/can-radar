@@ -278,7 +278,7 @@ function pilotKey(pilot: Pilot): string {
   margin: -8px -12px 0;
   padding: 8px 12px;
 
-  background: var(--vr-bg);
+  background: var(--surface);
 }
 
 .rt-tabs {
@@ -286,7 +286,7 @@ function pilotKey(pilot: Pilot): string {
   align-items: flex-end;
   margin: 0 -12px;
   padding: 0 12px;
-  border-bottom: 1px solid var(--vr-stroke);
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .rt-tab {
@@ -305,7 +305,7 @@ function pilotKey(pilot: Pilot): string {
   font-family: inherit;
   font-size: 13px;
   font-weight: 500;
-  color: var(--vr-t3);
+  color: var(--color-muted);
 
   background: transparent;
   cursor: pointer;
@@ -329,24 +329,24 @@ function pilotKey(pilot: Pilot): string {
 }
 
 .rt-tab:hover:not(.rt-tab--active) {
-  color: var(--vr-t1);
+  color: var(--color-ink);
 }
 .rt-tab:hover:not(.rt-tab--active)::after {
   height: 1px;
-  background: rgb(var(--vr-brand-rgb) / 0.5);
+  background: color-mix(in srgb, var(--color-can) 50%, transparent);
 }
 
 .rt-tab--active {
-  color: var(--vr-t1);
+  color: var(--color-ink);
   cursor: default;
 }
 .rt-tab--active::after {
   height: 2px;
-  background: var(--vr-brand);
+  background: var(--color-can);
 }
 
 .rt-tab_count {
-  font-family: var(--vr-font-alt);
+  font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
   color: var(--color-faint);
@@ -422,7 +422,7 @@ function pilotKey(pilot: Pilot): string {
   width: 100%;
   padding: 6px;
   border: none;
-  border-radius: 3px;
+  border-radius: var(--radius-control);
 
   font-family: inherit;
   text-align: left;
@@ -433,14 +433,14 @@ function pilotKey(pilot: Pilot): string {
   transition: background-color 0.2s ease;
 }
 .rt-row:hover {
-  background: var(--vr-alpha-8);
+  background: color-mix(in srgb, var(--color-ink) 8%, transparent);
 }
 
 /* 选中的那一行用左边一条品牌色的竖杠，而不是整行换底色 —— 底色在一列 hover 也
    会变色的行里分不出「选中」和「指针正好停在这儿」。 */
 .rt-row--selected {
-  background: var(--vr-alpha-8);
-  box-shadow: inset 2px 0 0 var(--vr-brand);
+  background: color-mix(in srgb, var(--color-ink) 8%, transparent);
+  box-shadow: inset 2px 0 0 var(--color-can);
 }
 
 .rt-row_chip {
@@ -458,14 +458,14 @@ function pilotKey(pilot: Pilot): string {
 .rt-row_mine {
   margin-left: 6px;
   padding: 1px 4px;
-  border: 1px solid var(--vr-brand);
-  border-radius: 3px;
+  border: 1px solid var(--color-can);
+  border-radius: var(--radius-control);
 
-  font-family: var(--vr-font);
+  font-family: var(--font-sans);
   font-size: 9px;
   font-weight: 600;
   letter-spacing: 0.04em;
-  color: var(--vr-brand);
+  color: var(--color-can);
   vertical-align: 1px;
 }
 
@@ -479,11 +479,11 @@ function pilotKey(pilot: Pilot): string {
 
 .rt-row_callsign {
   overflow: hidden;
-  font-family: var(--vr-font-mono);
+  font-family: var(--font-mono);
   font-size: 13px;
   font-weight: 600;
   line-height: 1.2;
-  color: var(--vr-t1);
+  color: var(--color-ink);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -509,7 +509,7 @@ function pilotKey(pilot: Pilot): string {
   flex: none;
   font-size: 11px;
   line-height: 1.2;
-  color: var(--vr-t3);
+  color: var(--color-muted);
 }
 .rt-row_trail--dim {
   color: var(--color-faint);

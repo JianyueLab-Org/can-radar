@@ -1,14 +1,9 @@
 {
   "header": {
-    "onlineMap": "Radar",
     "signIn": "Sign in",
     "signOut": "Sign out",
     "signingOut": "Signing out…",
     "signOutFailed": "Sign-out failed. Try again.",
-    "panel": "Pilots Panel",
-    "roster": "ATC Roster",
-    "activities": "Activities",
-    "downloads": "Downloads",
     "skipToContent": "Skip to main content",
     "openMenu": "Open main menu",
     "openSidebar": "Open navigation",
@@ -196,5 +191,11 @@
       "zh": "Chinese",
       "en": "English"
     }
+  },
+  "notFound": {
+    "code": "404",
+    "title": "Page not found",
+    "description": "The address may be wrong, or the page has moved.",
+    "home": "Back to the radar"
   }
 }
