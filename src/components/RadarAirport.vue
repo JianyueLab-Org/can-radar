@@ -140,6 +140,7 @@ const sections = computed<InfoPopupSection[]>(() => {
     v-if="snapshot"
     :sections="sections"
     accent="var(--color-can)"
+    :close-label="t('airport.close')"
     @close="emit('close')"
   >
     <template #title>
@@ -160,7 +161,7 @@ const sections = computed<InfoPopupSection[]>(() => {
         <li v-for="station in snapshot.stations" :key="station.callsign">
           <button
             type="button"
-            class="ra-item"
+            class="ra-item focus-ring"
             @click="emit('select', `atc:${station.callsign}`)"
           >
             <span
@@ -189,7 +190,7 @@ const sections = computed<InfoPopupSection[]>(() => {
         <li v-for="entry in snapshot.departures" :key="entry.pilot.callsign">
           <button
             type="button"
-            class="ra-item"
+            class="ra-item focus-ring"
             @click="
               emit('select', `pilot:${entry.pilot.cid || entry.pilot.callsign}`)
             "
@@ -203,7 +204,7 @@ const sections = computed<InfoPopupSection[]>(() => {
             />
             <span class="ra-item_callsign">{{ entry.pilot.callsign }}</span>
             <span class="ra-item_route vr-mono">
-              → {{ entry.pilot.flight_plan?.arrival || "—" }}
+              → {{ entry.pilot.flight_plan?.arrival || "----" }}
             </span>
             <span class="ra-item_trail vr-mono">
               {{
@@ -224,7 +225,7 @@ const sections = computed<InfoPopupSection[]>(() => {
         <li v-for="entry in snapshot.arrivals" :key="entry.pilot.callsign">
           <button
             type="button"
-            class="ra-item"
+            class="ra-item focus-ring"
             @click="
               emit('select', `pilot:${entry.pilot.cid || entry.pilot.callsign}`)
             "
@@ -238,7 +239,7 @@ const sections = computed<InfoPopupSection[]>(() => {
             />
             <span class="ra-item_callsign">{{ entry.pilot.callsign }}</span>
             <span class="ra-item_route vr-mono">
-              {{ entry.pilot.flight_plan?.departure || "—" }} →
+              {{ entry.pilot.flight_plan?.departure || "----" }} →
             </span>
             <span class="ra-item_trail vr-mono">
               {{

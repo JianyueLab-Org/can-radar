@@ -15,7 +15,7 @@
  * - **分区标题由 `sections` 声明，而不是调用方自己拼。** 这样每张卡的段间距、
  *   顶边、折叠行为都一样 —— 三个不同的人写三张卡，出来还是一套。
  */
-import { computed, ref, watch } from "vue";
+import { computed, ref, useId, watch } from "vue";
 import VrBlockTitle from "@/components/vr/VrBlockTitle.vue";
 
 export interface InfoPopupSection {
@@ -34,6 +34,8 @@ const props = withDefaults(
     maxHeight?: string;
     /** 头部左侧的一小块色标，用来一眼分出这是飞机、席位还是机场。 */
     accent?: string | null;
+    /** 关闭键的读屏名字。`closable` 的卡都要给 —— 图标按钮自己没有名字。 */
+    closeLabel?: string;
   }>(),
   {
     collapsible: true,
@@ -46,6 +48,10 @@ const props = withDefaults(
 const emit = defineEmits<{ close: [] }>();
 
 const collapsed = defineModel<boolean>("collapsed", { default: false });
+
+/* 折叠键以标题为名（`aria-labelledby`），配上 `aria-expanded`：读出来是「在线交
+ * 通，按钮，已展开」，不需要另一套「收起 / 展开」的文案。 */
+const titleId = useId();
 
 /** 哪几段被收起来了。按 key 记，所以换一架飞机不会把展开状态带过去。 */
 const collapsedSections = ref<string[]>([]);
@@ -91,7 +97,7 @@ function toggleSection(key: string) {
         :style="{ backgroundColor: accent }"
         aria-hidden="true"
       />
-      <h2 class="vr-popup_title vr-h5"><slot name="title" /></h2>
+      <h2 :id="titleId" class="vr-popup_title vr-h5"><slot name="title" /></h2>
 
       <div class="vr-popup_actions">
         <slot name="actions" />
@@ -99,7 +105,8 @@ function toggleSection(key: string) {
         <button
           v-if="collapsible"
           type="button"
-          class="vr-popup_action"
+          class="vr-popup-action"
+          :aria-labelledby="titleId"
           :aria-expanded="!collapsed"
           @click="collapsed = !collapsed"
         >
@@ -121,7 +128,9 @@ function toggleSection(key: string) {
         <button
           v-if="closable"
           type="button"
-          class="vr-popup_action vr-popup_action--close"
+          class="vr-popup-action vr-popup-action--close"
+          :aria-label="closeLabel"
+          :title="closeLabel"
           @click="emit('close')"
         >
           <svg
@@ -243,38 +252,15 @@ function toggleSection(key: string) {
   align-items: center;
 }
 
-.vr-popup_action {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: none;
-
-  color: var(--color-muted);
-
-  background: transparent;
-  cursor: pointer;
-
-  transition: color 0.3s ease;
-}
-.vr-popup_action svg {
-  width: 14px;
-  height: 14px;
-}
-.vr-popup_action:hover {
-  color: var(--color-can);
-}
-/* 关闭键 hover 成红色，并且左边有一条竖线把它和别的动作分开 —— 它是唯一一个
-   会丢掉当前这张卡的动作。 */
-.vr-popup_action--close {
+/* 按钮本身的样子在 globals.css 的 `.vr-popup-action`，和插槽传进来的定位键是同
+   一条规则。关闭键 hover 成红色，并且左边有一条竖线把它和别的动作分开 —— 它是
+   唯一一个会丢掉当前这张卡的动作。 */
+.vr-popup-action--close {
   padding-left: 8px;
   width: 28px;
   border-left: 1px solid color-mix(in srgb, var(--color-ink) 12%, transparent);
 }
-.vr-popup_action--close:hover {
+.vr-popup-action--close:hover {
   color: var(--color-danger);
 }
 

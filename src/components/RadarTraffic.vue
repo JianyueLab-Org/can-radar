@@ -15,6 +15,7 @@ import { computed } from "vue";
 import { Icon } from "@jianyuelab-org/can-ui";
 import VrInfoPopup from "@/components/vr/VrInfoPopup.vue";
 import VrButton from "@/components/vr/VrButton.vue";
+import VrTabs from "@/components/vr/VrTabs.vue";
 import { getFacilityName } from "@/lib/facilities";
 import { createTranslator } from "@/lib/i18n";
 import {
@@ -99,21 +100,13 @@ function pilotKey(pilot: Pilot): string {
     <!-- 页签 + 搜索 + 筛选，钉在卡片顶部 -->
     <template #prepend>
       <div class="rt-controls">
-        <div class="rt-tabs">
-          <button
-            v-for="(meta, key) in tabs"
-            :key="key"
-            type="button"
-            role="tab"
-            class="rt-tab"
-            :class="{ 'rt-tab--active': tab === key }"
-            :aria-selected="tab === key"
-            @click="tab = key as 'controllers' | 'pilots'"
-          >
-            {{ meta.title }}
-            <span class="rt-tab_count">{{ meta.count }}</span>
-          </button>
-        </div>
+        <VrTabs
+          class="rt-tabs"
+          :model-value="tab"
+          :tabs="tabs"
+          full-width
+          @update:model-value="tab = $event as 'controllers' | 'pilots'"
+        />
 
         <div class="rt-search">
           <Icon name="magnifyingGlass" class="rt-search_icon" />
@@ -182,7 +175,7 @@ function pilotKey(pilot: Pilot): string {
           <li v-for="(c, index) in controllers" :key="`${c.callsign}-${index}`">
             <button
               type="button"
-              class="rt-row"
+              class="rt-row focus-ring"
               :class="{ 'rt-row--selected': selected === `atc:${c.callsign}` }"
               :aria-pressed="selected === `atc:${c.callsign}`"
               @click="emit('select', `atc:${c.callsign}`)"
@@ -209,7 +202,7 @@ function pilotKey(pilot: Pilot): string {
           <li v-for="(p, index) in pilots" :key="`${p.callsign}-${index}`">
             <button
               type="button"
-              class="rt-row"
+              class="rt-row focus-ring"
               :class="{ 'rt-row--selected': selected === pilotKey(p) }"
               :aria-pressed="selected === pilotKey(p)"
               @click="emit('select', pilotKey(p))"
@@ -225,7 +218,7 @@ function pilotKey(pilot: Pilot): string {
                   <!-- 自己那架。名单按呼号排，自己那一行不会总在看得见的地方，
                        所以它得自己认领一个记号 —— 和地图上那架戴的是同一个品牌
                        色的圈。 -->
-                  <span v-if="mine === pilotKey(p)" class="rt-row_mine">
+                  <span v-if="mine === pilotKey(p)" class="vr-tag rt-row_mine">
                     {{ t("mine.tag") }}
                   </span>
                 </span>
@@ -281,76 +274,10 @@ function pilotKey(pilot: Pilot): string {
   background: var(--surface);
 }
 
+/* 页签栏的底边横贯整张卡：把卡片的 12px 内边距抵掉。 */
 .rt-tabs {
-  display: flex;
-  align-items: flex-end;
   margin: 0 -12px;
   padding: 0 12px;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.rt-tab {
-  position: relative;
-
-  display: flex;
-  flex: 1 1 0;
-  gap: 6px;
-  align-items: center;
-  justify-content: center;
-
-  min-width: 0;
-  padding: 8px 12px;
-  border: none;
-
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--color-muted);
-
-  background: transparent;
-  cursor: pointer;
-}
-
-.rt-tab::after {
-  content: "";
-
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-
-  width: 100%;
-  height: 0;
-
-  background: transparent;
-
-  transition:
-    height 0.3s ease,
-    background-color 0.3s ease;
-}
-
-.rt-tab:hover:not(.rt-tab--active) {
-  color: var(--color-ink);
-}
-.rt-tab:hover:not(.rt-tab--active)::after {
-  height: 1px;
-  background: color-mix(in srgb, var(--color-can) 50%, transparent);
-}
-
-.rt-tab--active {
-  color: var(--color-ink);
-  cursor: default;
-}
-.rt-tab--active::after {
-  height: 2px;
-  background: var(--color-can);
-}
-
-.rt-tab_count {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--color-faint);
-  font-variant-numeric: tabular-nums;
 }
 
 .rt-search {
@@ -457,15 +384,6 @@ function pilotKey(pilot: Pilot): string {
 
 .rt-row_mine {
   margin-left: 6px;
-  padding: 1px 4px;
-  border: 1px solid var(--color-can);
-  border-radius: var(--radius-control);
-
-  font-family: var(--font-sans);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--color-can);
   vertical-align: 1px;
 }
 

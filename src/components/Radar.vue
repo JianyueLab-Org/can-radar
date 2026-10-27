@@ -131,8 +131,12 @@ let observer: MutationObserver | null = null;
  */
 let inflight: AbortController | null = null;
 
+/* 24 小时制：这是一张航空的图，旁边的时段也全是 `12:00–15:59Z` 这种写法；而且
+ * 等宽字下 `AM`/`PM` 会让状态条的宽度随时段跳一下。 */
 const lastUpdateLabel = computed(() =>
-  lastUpdate.value ? lastUpdate.value.toLocaleTimeString() : t("never"),
+  lastUpdate.value
+    ? lastUpdate.value.toLocaleTimeString([], { hourCycle: "h23" })
+    : t("never"),
 );
 
 async function fetchData() {
@@ -598,6 +602,7 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
         icon
         :active="settingsOpen"
         :aria-label="t('settings.title')"
+        :aria-expanded="settingsOpen"
         :title="t('settings.title')"
         @click="settingsOpen = !settingsOpen"
       >
@@ -662,10 +667,14 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
       </div>
 
       <div class="radar_settings_body">
-        <label class="vr-label radar_settings_k">{{
+        <label for="radar-basemap" class="vr-label radar_settings_k">{{
           t("settings.basemap")
         }}</label>
-        <select v-model="settings.basemap" class="input radar_settings_select">
+        <select
+          id="radar-basemap"
+          v-model="settings.basemap"
+          class="input radar_settings_select"
+        >
           <option value="auto">{{ t("settings.basemapAuto") }}</option>
           <option value="dark">{{ t("settings.basemapDark") }}</option>
           <option value="light">{{ t("settings.basemapLight") }}</option>
@@ -690,10 +699,14 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
           {{ t("settings.rangeRings") }}
         </label>
 
-        <label class="vr-label radar_settings_k">{{
+        <label for="radar-units" class="vr-label radar_settings_k">{{
           t("settings.units")
         }}</label>
-        <select v-model="settings.units" class="input radar_settings_select">
+        <select
+          id="radar-units"
+          v-model="settings.units"
+          class="input radar_settings_select"
+        >
           <option value="aviation">{{ t("settings.unitsAviation") }}</option>
           <option value="metric">{{ t("settings.unitsMetric") }}</option>
         </select>
@@ -918,6 +931,11 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
 .radar_status_dot--stale {
   background: var(--color-danger);
   animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .radar_status_dot {
+    animation: none;
+  }
 }
 
 @keyframes radar-pulse {
@@ -1164,6 +1182,13 @@ const zoomRange = computed(() => mapRef.value?.zoomRange ?? [0, 18]);
 /* 给右上角那个开关让出位置。 */
 .radar_rail > :first-child {
   margin-top: 40px;
+}
+
+/* 卡片按自己的高度排，放不下时整列滚动，而不是一起被压扁 —— 不加这一条，卡片
+   的 `overflow-y: auto` 让它们的最小高度归零，四张卡平分一屏，交通名单在 900px
+   高的窗口里只剩两行半，手机抽屉里一行都不剩。 */
+.radar_rail > * {
+  flex-shrink: 0;
 }
 
 .radar_rail-toggle {

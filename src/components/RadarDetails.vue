@@ -268,6 +268,7 @@ const remaining = computed(() => {
               {
                 hour: "2-digit",
                 minute: "2-digit",
+                hourCycle: "h23",
               },
             ),
             duration:
@@ -334,6 +335,7 @@ const sections = computed<InfoPopupSection[]>(() => {
     v-if="pilot || controller"
     :sections="sections"
     :accent="accent"
+    :close-label="t('details.close')"
     @close="emit('close')"
   >
     <template #title>
@@ -498,8 +500,6 @@ const sections = computed<InfoPopupSection[]>(() => {
 </template>
 
 <style scoped>
-/* 头部动作区的按钮。和 VrInfoPopup 自己的折叠/关闭长一样 —— 那两个是组件内部
-   的，这个是插槽传进去的，所以样式要在这边写一份。 */
 .rd-subtitle {
   display: flex;
   flex-wrap: wrap;
@@ -594,34 +594,5 @@ const sections = computed<InfoPopupSection[]>(() => {
   border-radius: var(--radius-control);
 
   background: color-mix(in srgb, var(--color-ink) 4%, transparent);
-}
-</style>
-
-<style>
-/* 插槽传进 VrInfoPopup 头部的按钮，样式不能靠 scoped —— 它渲染在子组件的
-   作用域里。这一条是全局的，名字带 `vr-popup-action` 前缀避免撞车。 */
-.vr-popup-action {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: none;
-
-  color: var(--color-muted);
-
-  background: transparent;
-  cursor: pointer;
-
-  transition: color 0.3s ease;
-}
-.vr-popup-action svg {
-  width: 14px;
-  height: 14px;
-}
-.vr-popup-action:hover {
-  color: var(--color-can);
 }
 </style>
