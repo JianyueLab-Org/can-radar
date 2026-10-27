@@ -71,7 +71,7 @@ function href(id: number): string {
           <!-- 整行是一个通往主站活动详情的链接。**新标签页打开**：雷达是一张一
                直开着看的图，把它换成一篇活动说明，人回来时要重新等一次地图。 -->
           <a
-            class="ra-row"
+            class="ra-row focus-ring"
             :href="href(view.activity.id)"
             target="_blank"
             rel="noopener noreferrer"
@@ -79,7 +79,10 @@ function href(id: number): string {
             <span class="ra-row_main">
               <span class="ra-row_head">
                 <span class="ra-row_name">{{ view.activity.title }}</span>
-                <span v-if="view.activity.professional" class="ra-row_tag">
+                <span
+                  v-if="view.activity.professional"
+                  class="vr-tag ra-row_tag"
+                >
                   {{ t("activities.professional") }}
                 </span>
               </span>
@@ -89,7 +92,10 @@ function href(id: number): string {
               }}</span>
 
               <span class="ra-row_meta">
-                <span v-if="view.activity.airports.length" class="vr-mono">
+                <span
+                  v-if="view.activity.airports.length"
+                  class="ra-row_airports vr-mono"
+                >
                   {{ view.activity.airports.join(" ") }}
                 </span>
                 <span>
@@ -183,15 +189,6 @@ function href(id: number): string {
 
 .ra-row_tag {
   flex: none;
-  padding: 1px 4px;
-  border: 1px solid var(--color-can);
-  border-radius: var(--radius-control);
-
-  font-family: var(--font-sans);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--color-can);
 }
 
 .ra-row_sub {
@@ -203,8 +200,9 @@ function href(id: number): string {
   white-space: nowrap;
 }
 
-/* 机场、报名人数、席位数挤在一行。放不下就截断 —— 这三样都是「扫一眼」的信息，
-   换行会让每一行活动的高度取决于它办在几个机场。 */
+/* 机场、报名人数、席位数挤在一行。放不下时只截断机场那一串 —— 人数和席位是两个
+   短数字，截成「1 人…」就什么都没说；换行又会让每一行活动的高度取决于它办在几
+   个机场。 */
 .ra-row_meta {
   display: flex;
   gap: 8px;
@@ -217,6 +215,11 @@ function href(id: number): string {
   white-space: nowrap;
 }
 .ra-row_meta > span {
+  flex: none;
+}
+.ra-row_meta > .ra-row_airports {
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }

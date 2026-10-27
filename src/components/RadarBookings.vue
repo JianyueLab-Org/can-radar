@@ -198,7 +198,7 @@ function activityHref(view: StaffingView): string | null {
           <component
             :is="isOnline(view) ? 'button' : 'div'"
             :type="isOnline(view) ? 'button' : undefined"
-            class="rb-row"
+            class="rb-row focus-ring"
             :class="{
               'rb-row--clickable': isOnline(view),
               'rb-row--selected': selected === selectionKey(view),
@@ -218,12 +218,12 @@ function activityHref(view: StaffingView): string | null {
             <span class="rb-row_main">
               <span class="rb-row_callsign">
                 {{ view.entry.callsign }}
-                <span v-if="view.entry.mine" class="rb-row_tag">
+                <span v-if="view.entry.mine" class="vr-tag rb-row_tag">
                   {{ t("bookings.mine") }}
                 </span>
                 <span
                   v-if="isOnline(view)"
-                  class="rb-row_tag rb-row_tag--online"
+                  class="vr-tag vr-tag--success rb-row_tag"
                 >
                   {{ t("bookings.online") }}
                 </span>
@@ -279,7 +279,7 @@ function activityHref(view: StaffingView): string | null {
             :href="isOnline(view) ? undefined : activityHref(view)"
             :target="isOnline(view) ? undefined : '_blank'"
             :rel="isOnline(view) ? undefined : 'noopener noreferrer'"
-            class="rb-row rb-row--clickable"
+            class="rb-row rb-row--clickable focus-ring"
             :class="{ 'rb-row--selected': selected === selectionKey(view) }"
             :aria-pressed="
               isOnline(view) ? selected === selectionKey(view) : undefined
@@ -296,12 +296,12 @@ function activityHref(view: StaffingView): string | null {
             <span class="rb-row_main">
               <span class="rb-row_callsign">
                 {{ view.entry.callsign }}
-                <span v-if="view.entry.mine" class="rb-row_tag">
+                <span v-if="view.entry.mine" class="vr-tag rb-row_tag">
                   {{ t("bookings.mine") }}
                 </span>
                 <span
                   v-if="isOnline(view)"
-                  class="rb-row_tag rb-row_tag--online"
+                  class="vr-tag vr-tag--success rb-row_tag"
                 >
                   {{ t("bookings.online") }}
                 </span>
@@ -412,20 +412,7 @@ function activityHref(view: StaffingView): string | null {
 
 .rb-row_tag {
   margin-left: 6px;
-  padding: 1px 4px;
-  border: 1px solid var(--color-can);
-  border-radius: var(--radius-control);
-
-  font-family: var(--font-sans);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--color-can);
   vertical-align: 1px;
-}
-.rb-row_tag--online {
-  border-color: var(--color-success);
-  color: var(--color-success);
 }
 
 .rb-row_sub {

@@ -144,7 +144,8 @@
   display: grid;
   grid-template-columns: minmax(0, 34%) minmax(0, 1fr);
   gap: 8px;
-  align-items: center;
+  /* 基线对齐：值折成两行时，标签贴着第一行，而不是浮在两行中间。 */
+  align-items: baseline;
 }
 
 .vr-row_k {
@@ -231,6 +232,53 @@
    席位色块仍是白字。 */
 .vr-chip--status {
   color: var(--color-on-can);
+}
+
+/* 跟在呼号或标题后面的小标记（「我」「已上线」「专业」）。三张卡共用一个形状；
+   位置（外边距、行内对齐）由各自的行决定。 */
+.vr-tag {
+  padding: 1px 4px;
+  border: 1px solid var(--color-can);
+  border-radius: var(--radius-control);
+
+  font-family: var(--font-sans);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  color: var(--color-can);
+  white-space: nowrap;
+}
+.vr-tag--success {
+  border-color: var(--color-success);
+  color: var(--color-success);
+}
+
+/* 浮层头部和设置浮层的图标按钮（定位、折叠、关闭）。VrInfoPopup 自己的和插槽
+   传进去的是同一个样子，所以放在这里而不是某个组件的 scoped 里。 */
+.vr-popup-action {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+
+  color: var(--color-muted);
+
+  background: transparent;
+  cursor: pointer;
+
+  transition: color 0.3s ease;
+}
+.vr-popup-action svg {
+  width: 14px;
+  height: 14px;
+}
+.vr-popup-action:hover {
+  color: var(--color-can);
 }
 
 /* ---------------------------------------------------------------------------

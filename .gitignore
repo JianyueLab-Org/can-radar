@@ -33,3 +33,6 @@ pnpm-debug.log*
 # 所以文件不进仓库，也不进公开的镜像。用 NAVDATA_DIR 指到运行时挂进来的目录；
 # 文件缺席时 /api/v1/route 回 503，地图退回那条直飞弧线，不会坏。
 data/navdata/
+
+# scratch
+.temp/
