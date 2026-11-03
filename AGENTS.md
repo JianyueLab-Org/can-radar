@@ -17,6 +17,10 @@ bun run build && bun run start
 门禁是 `bun run lint`、`bun run build`、`bun run check:pages`，CI 同样三条（`check.yml`）。
 `astro check` 看不见 `.vue`，所以 `typecheck` 同时跑 `vue-tsc`——两个都要留着。
 
+Unsafe sign-out and notification requests require `Origin` to equal `PUBLIC_ORIGIN`.
+Missing, `null`, and foreign origins return 403 before forwarding.
+GET, HEAD, and OPTIONS do not require Origin.
+
 ## 五条要紧的
 
 **1. 导航数据不在这个站点里，一点都没有。** 它曾经在（`NAVDATA_DIR` 挂进来、

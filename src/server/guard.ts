@@ -17,15 +17,14 @@ import { publicOrigin } from "./config";
  * 关掉不等于不检查，检查换到这里、比对**显式配置**的 `PUBLIC_ORIGIN`，那个值
  * 不是从请求头推的，所以反代动不了它。
  *
- * 会话 cookie 是 SameSite=Lax，跨站的表单 POST 本来就带不上它，所以这道检查不
- * 是唯一的门 —— 但 Lax 对顶层导航的 GET 是放行的，哪天有人把某个写操作改成
- * GET、或者浏览器再改一次 Lax 的语义，这里是唯一还站着的东西。
+ * SameSite=Lax still sends cookies between sibling hosts. Unsafe requests must
+ * carry this site's configured Origin; safe requests do not need one.
  */
 export function crossOrigin(context: APIContext): boolean {
-  const sent = context.request.headers.get("origin");
-  // 没有 Origin 头的不是浏览器发起的跨站请求（curl、同源的老浏览器），放行 ——
-  // 拒绝它只会打到不带这个头的正常调用，挡不住任何东西。
-  return !!sent && sent !== publicOrigin();
+  const method = context.request.method;
+  if (method === "GET" || method === "HEAD" || method === "OPTIONS")
+    return false;
+  return context.request.headers.get("origin") !== publicOrigin();
 }
 
 /** 跨站请求的答复。形状和本站其他 `/api/v1/*` 的错误一致。 */
