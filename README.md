@@ -29,6 +29,8 @@ bun run build && bun run start
 | 已飞航迹           | 本站 `/api/v1/track` —— **一个转发**，真正读 `flightPosition` 的是 can-api |
 | 航路解析           | 本站 `/api/v1/route`，服务端读 `data/navdata`                              |
 
+`GET /health`：外部监控用，检查 can-api 的 `/health`。正常 200，失败 503；结果缓存 10 秒。
+
 公开数据馈送带 CAN ID、客户端填报的姓名和模拟器位置。第 35 条评估见
 [`docs/dpia.md`](docs/dpia.md)。成员说明在文档站的[隐私说明](https://docs.ceruleanavi.net/zh_CN/privacy)。
 
