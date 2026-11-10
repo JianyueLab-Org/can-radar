@@ -4,6 +4,7 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_call:
 
 # 门是本地那三条命令：lint、build、check:pages。只用内置的 GITHUB_TOKEN。
 permissions:
