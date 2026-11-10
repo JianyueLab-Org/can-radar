@@ -122,6 +122,11 @@ can-api 签发会话时把 cookie 的 Domain 设成父域 `.ceruleanavi.net`（�
 上跑的是哪个 commit。集群的 kubectl 走 Omni 的 OIDC，CI 里非交互地过不去，所
 以 CI 用的是直连 API server 的 `deployer` 服务账号（`KUBECONFIG_B64`）。
 
+Docker 构建上下文排除本地 `.env*`、依赖、生成产物、Git 元数据和商业
+`data/navdata`，保留 `.npmrc`、源码、词典、脚本及 `public/` 中的
+VATSpy / SimAware 静态数据。运行时环境变量由部署注入；包令牌通过
+`github_token` BuildKit secret 提供。
+
 Each deployment first calls the local `check.yml` in the same run.
 Lint, build, and page checks must pass before deployment starts.
 Checks use Bun `1.4.2` and only the automatic `GITHUB_TOKEN`; no production secrets are forwarded.
