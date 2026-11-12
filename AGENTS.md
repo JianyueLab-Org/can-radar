@@ -22,6 +22,9 @@ Unsafe sign-out and notification requests require `Origin` to equal `PUBLIC_ORIG
 Missing, `null`, and foreign origins return 403 before forwarding.
 GET, HEAD, and OPTIONS do not require Origin.
 
+Track, METAR, and route proxies preserve upstream `Retry-After` only on 429 responses.
+Missing headers stay absent. Upstream 429 responses are not cached.
+
 ## 五条要紧的
 
 **1. 导航数据不在这个站点里，一点都没有。** 它曾经在（`NAVDATA_DIR` 挂进来、
