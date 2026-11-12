@@ -3,6 +3,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { GET as metar } from "../pages/api/v1/metar";
 import { GET as route } from "../pages/api/v1/route";
+import { GET as track } from "../pages/api/v1/track";
 import {
   isPublicMetar,
   isPublicRoute,
@@ -64,6 +65,7 @@ afterEach(() => {
   AbortSignal.timeout = originalTimeout;
   clear("metar:ip:203.0.113.31");
   clear("route:ip:203.0.113.31");
+  clear("track:ip:203.0.113.31");
 });
 
 describe("public proxy cache", () => {
@@ -322,7 +324,9 @@ describe("public proxy cache", () => {
       expect(await first.text()).toBe("failure body");
       expect(first.headers.get("Content-Type")).toBe("text/plain");
       expect(first.headers.get("Cache-Control")).toBe("no-store");
-      expect(first.headers.get("Retry-After")).toBeNull();
+      expect(first.headers.get("Retry-After")).toBe(
+        status === 429 ? "60" : null,
+      );
       await cache.fetch("https://api.test/route", options);
       expect(calls).toHaveLength(2);
     },
@@ -473,7 +477,82 @@ describe("public payload validators", () => {
   });
 });
 
-describe("METAR and route proxy integration", () => {
+describe("public proxy integration", () => {
+  test.each(["metar", "route", "track"])(
+    "%s preserves Retry-After only for upstream 429 responses",
+    async (endpoint) => {
+      for (const [status, retryAfter, expected] of [
+        [429, "60", "60"],
+        [429, "Fri, 13 Nov 2026 12:00:00 GMT", "Fri, 13 Nov 2026 12:00:00 GMT"],
+        [429, null, null],
+        [503, "60", null],
+        [200, "60", null],
+      ] as const) {
+        const icao = freshIcao();
+        const path =
+          endpoint === "metar"
+            ? `/api/v1/metar?icao=${icao}`
+            : endpoint === "route"
+              ? `/api/v1/route?departure=${icao}&arrival=ZSPD`
+              : `/api/v1/track?callsign=${icao}`;
+        const get =
+          endpoint === "metar" ? metar : endpoint === "route" ? route : track;
+        stub(
+          () =>
+            new Response("upstream body", {
+              status,
+              headers: retryAfter === null ? {} : { "Retry-After": retryAfter },
+            }),
+        );
+
+        const response = await get(context(path));
+        expect(response.status).toBe(status);
+        expect(response.headers.get("Retry-After")).toBe(expected);
+        expect(await response.text()).toBe("upstream body");
+        if (status !== 200)
+          expect(response.headers.get("Cache-Control")).toBe("no-store");
+        if (status === 429) {
+          await get(context(path));
+          expect(calls).toHaveLength(2);
+        }
+      }
+    },
+  );
+
+  test.each(["metar", "route"])(
+    "%s keeps Retry-After for every coalesced upstream 429 consumer",
+    async (endpoint) => {
+      const icao = freshIcao();
+      const path =
+        endpoint === "metar"
+          ? `/api/v1/metar?icao=${icao}`
+          : `/api/v1/route?departure=${icao}&arrival=ZSPD`;
+      const get = endpoint === "metar" ? metar : route;
+      const { promise, resolve } = Promise.withResolvers<void>();
+      stub(async () => {
+        await promise;
+        return new Response("rate limited", {
+          status: 429,
+          headers: { "Retry-After": "Fri, 13 Nov 2026 12:00:00 GMT" },
+        });
+      });
+      const first = get(context(path));
+      const joined = get(context(path));
+      expect(calls).toHaveLength(1);
+      resolve();
+      for (const response of await Promise.all([first, joined])) {
+        expect(response.status).toBe(429);
+        expect(response.headers.get("Retry-After")).toBe(
+          "Fri, 13 Nov 2026 12:00:00 GMT",
+        );
+        expect(response.headers.get("Cache-Control")).toBe("no-store");
+        expect(await response.text()).toBe("rate limited");
+      }
+      await get(context(path));
+      expect(calls).toHaveLength(2);
+    },
+  );
+
   test("METAR normalizes keys and ignores incoming credentials and extra parameters", async () => {
     const icao = freshIcao();
     stub(() => Response.json({ icao, metar: "" }));

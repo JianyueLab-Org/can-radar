@@ -132,6 +132,9 @@ export class PublicProxyCache {
       }
     }
 
+    const retryAfter =
+      response.status === 429 ? response.headers.get("Retry-After") : null;
+
     return {
       body,
       status: response.status,
@@ -140,6 +143,7 @@ export class PublicProxyCache {
         "Cache-Control": cacheable
           ? `public, max-age=${options.ttlSeconds}`
           : "no-store",
+        ...(retryAfter !== null ? { "Retry-After": retryAfter } : {}),
       },
       cacheable,
     };

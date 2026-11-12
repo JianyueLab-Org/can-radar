@@ -52,6 +52,8 @@ export const GET = async (context: APIContext) => {
   }
 
   const body = await response.text();
+  const retryAfter =
+    response.status === 429 ? response.headers.get("Retry-After") : null;
   return new Response(body, {
     status: response.status,
     headers: {
@@ -59,6 +61,7 @@ export const GET = async (context: APIContext) => {
         response.headers.get("content-type") ?? "application/json",
       // 航迹每几秒才多一个点，短缓存足够挡住「选着一架飞机不动」的重复查询。
       "Cache-Control": response.ok ? "public, max-age=10" : "no-store",
+      ...(retryAfter !== null ? { "Retry-After": retryAfter } : {}),
     },
   });
 };
