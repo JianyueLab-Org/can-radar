@@ -14,7 +14,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "astro check && node ./scripts/typecheck-vue.mjs",
-    "lint": "bun run format:check && bun run typecheck",
+    "test": "bun test",
+    "lint": "bun run format:check && bun run typecheck && bun run test",
     "check:pages": "can-ui-check-pages radar"
   },
   "dependencies": {

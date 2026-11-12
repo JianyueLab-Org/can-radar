@@ -16,7 +16,7 @@ can-web 里的时候就不在 `PROTECTED_PREFIXES` 里。
 ```bash
 bun install
 bun run dev      # :4323（4321 是 can-web，4322 是 can-dev）
-bun run lint     # format:check + astro check + vue-tsc
+bun run lint     # format:check + astro check + vue-tsc + bun test
 bun run check:pages  # can-ui ⌘K 页面表里 radar 的每一条都有路由
 bun run build && bun run start
 ```
