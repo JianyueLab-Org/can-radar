@@ -9,13 +9,14 @@ CAN 在线雷达，从 can-web 拆出来。Astro SSR + Vue 岛屿 + Tailwind v4 
 
 ```bash
 bun run dev      # :4323（4321 can-web，4322 can-dev）
-bun run lint     # format:check + astro check + vue-tsc
+bun run lint     # format:check + astro check + vue-tsc + bun test
 bun run check:pages  # can-ui ⌘K 页面表里 radar 的每一条都有路由
 bun run build && bun run start
 ```
 
 门禁是 `bun run lint`、`bun run build`、`bun run check:pages`，CI 同样三条（`check.yml`）。
 `astro check` 看不见 `.vue`，所以 `typecheck` 同时跑 `vue-tsc`——两个都要留着。
+`bun run test` 单独跑 Bun 测试；`lint` 已包含它，CI 不重复跑。
 
 Unsafe sign-out and notification requests require `Origin` to equal `PUBLIC_ORIGIN`.
 Missing, `null`, and foreign origins return 403 before forwarding.
@@ -57,8 +58,8 @@ radar.ceruleanavi.net 是那个域下面的一台主机，所以那枚 cookie �
 - **认出人的那份 HTML 不能被缓存**（`index.astro` 里那个 `private, no-store`）。
 - **通知铃**：`Frame.vue` 设 `notifications`。`src/pages/api/v1/notifications/[...path].ts`
   转发五条路径给 can-api；请求不带 `can_session` 时答 401，不问上游。逻辑和测试在
-  `src/server/notifications.ts`、`src/server/notifications.test.ts`（`bun test` 直接跑，
-  `lint` 不跑它）。
+  `src/server/notifications.ts`、`src/server/notifications.test.ts`（`bun run test` 直接跑，
+  `lint` 也包含它）。
 - **本站的写操作只有登出（`/api/v1/auth/signout`）和通知铃的标记已读**，它们连带着 `astro.config.mjs` 里关掉
   的 `checkOrigin` 和 `src/server/guard.ts` —— 三件事一起读，理由写在那两个文件
   里（反代 + TLS 终止会让 Astro 自带的那道检查永远 403）。
